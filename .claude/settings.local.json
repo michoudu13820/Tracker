@@ -37,7 +37,8 @@
       "PowerShell(gh *)",
       "PowerShell(Test-Path *)",
       "PowerShell(Get-ChildItem *)",
-      "PowerShell(git config *)"
+      "PowerShell(git config *)",
+      "PowerShell(git *)"
     ]
   }
 }
