@@ -2,12 +2,30 @@
 	import { onMount } from 'svelte';
 	import { habitsStore } from '$lib/stores/habits.store.svelte';
 	import { toIsoDate } from '$lib/domain/dates';
+	import { subscribe, pushSchedule, isPushSupported, isStandalone } from '$lib/push/client';
 
 	const today = toIsoDate(new Date());
+	let pushStatus = $state<'idle' | 'sending' | 'ok' | 'error' | 'unsupported'>('idle');
 
 	onMount(() => {
 		void habitsStore.load();
 	});
+
+	/** Bouton de test manuel : abonne le navigateur et programme un rappel immédiat (déjà dû). */
+	async function testPush() {
+		if (!isPushSupported()) {
+			pushStatus = 'unsupported';
+			return;
+		}
+		pushStatus = 'sending';
+		const sub = await subscribe();
+		if (!sub) {
+			pushStatus = 'error';
+			return;
+		}
+		await pushSchedule(sub, [{ date: today, sendAt: Date.now() - 1000 }]);
+		pushStatus = 'ok';
+	}
 </script>
 
 <svelte:head>
@@ -29,6 +47,19 @@
 			{/each}
 		</ul>
 	{/if}
+
+	<section class="push-test">
+		<button onclick={testPush}>Activer les rappels (test push)</button>
+		{#if pushStatus === 'ok'}
+			<p class="muted">Abonné, rappel programmé. Déclenche l'envoi côté serveur pour le recevoir tout de suite.</p>
+		{:else if pushStatus === 'unsupported'}
+			<p class="muted">Web Push indisponible : installe d'abord la PWA via « Ajouter à l'écran d'accueil ».</p>
+		{:else if pushStatus === 'error'}
+			<p class="muted">Permission refusée ou abonnement impossible.</p>
+		{:else if !isStandalone()}
+			<p class="muted">iOS : ouvre l'app depuis l'icône ajoutée à l'écran d'accueil pour que les notifications fonctionnent.</p>
+		{/if}
+	</section>
 </main>
 
 <style>
@@ -52,5 +83,17 @@
 		background: var(--surface);
 		border-radius: 0.75rem;
 		margin-bottom: 0.5rem;
+	}
+	.push-test {
+		margin-top: 2rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--surface);
+	}
+	.push-test button {
+		padding: 0.6rem 1rem;
+		border-radius: 0.75rem;
+		border: none;
+		background: var(--surface);
+		font-size: 1rem;
 	}
 </style>

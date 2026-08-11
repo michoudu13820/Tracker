@@ -1,11 +1,5 @@
 import type { Config } from '@netlify/functions';
-import webpush from 'web-push';
-import {
-	subscriptionsStore,
-	saveSubscription,
-	deleteSubscription,
-	type StoredSubscription
-} from './_shared/store';
+import { sendDueReminders } from './_shared/send-due';
 
 /**
  * FONCTION PLANIFIÉE (cron) — le seul « moteur » du backend.
@@ -18,67 +12,12 @@ import {
  *
  * Granularité cron : toutes les 15 min. Le rappel est donc au pire 15 min « en retard »
  * sur l'heure choisie — acceptable pour un rappel quotidien. Réduire à `*\/5 * * * *`
- * si besoin de plus de précision.
+ * si besoin de plus de précision. Pour un test immédiat sans attendre le cron, voir
+ * `trigger-send.ts` qui exécute la même logique à la demande.
  */
 export default async function handler(): Promise<Response> {
-	configureVapid();
-
-	const store = subscriptionsStore();
-	const { blobs } = await store.list();
-	const now = Date.now();
-	const GENERIC = {
-		title: 'Tracker',
-		body: "Tu as des habitudes prévues aujourd'hui.",
-		tag: 'daily-reminder'
-	};
-
-	for (const { key } of blobs) {
-		const data = (await store.get(key, { type: 'json' })) as StoredSubscription | null;
-		if (!data) continue;
-
-		// Rappels arrivés à échéance et non encore envoyés.
-		const due = data.reminders.filter(
-			(r) => r.sendAt <= now && (data.lastSentAt === undefined || r.sendAt > data.lastSentAt)
-		);
-		if (due.length === 0) continue;
-
-		try {
-			await webpush.sendNotification(
-				{
-					endpoint: data.subscription.endpoint,
-					keys: data.subscription.keys
-				},
-				JSON.stringify(GENERIC)
-			);
-
-			// Purge les rappels passés + mémorise le dernier envoi (anti-doublon).
-			const latest = Math.max(...due.map((r) => r.sendAt));
-			await saveSubscription({
-				...data,
-				reminders: data.reminders.filter((r) => r.sendAt > now),
-				lastSentAt: latest,
-				updatedAt: now
-			});
-		} catch (err) {
-			// 404/410 = souscription expirée côté navigateur → on nettoie.
-			const status = (err as { statusCode?: number }).statusCode;
-			if (status === 404 || status === 410) {
-				await deleteSubscription(data.subscription.endpoint);
-			}
-		}
-	}
-
+	await sendDueReminders();
 	return new Response('ok');
-}
-
-function configureVapid() {
-	const publicKey = process.env.VAPID_PUBLIC_KEY;
-	const privateKey = process.env.VAPID_PRIVATE_KEY;
-	const subject = process.env.VAPID_SUBJECT ?? 'mailto:admin@example.com';
-	if (!publicKey || !privateKey) {
-		throw new Error('VAPID keys manquantes (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY).');
-	}
-	webpush.setVapidDetails(subject, publicKey, privateKey);
 }
 
 /** Planification cron : toutes les 15 minutes. */

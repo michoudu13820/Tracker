@@ -38,7 +38,12 @@
       "PowerShell(Test-Path *)",
       "PowerShell(Get-ChildItem *)",
       "PowerShell(git config *)",
-      "PowerShell(git *)"
+      "PowerShell(git *)",
+      "WebFetch(domain:www.mobiloud.com)",
+      "WebFetch(domain:pushalert.co)",
+      "PowerShell(netlify *)",
+      "PowerShell(Out-File *)",
+      "PowerShell(npm test *)"
     ]
   }
 }
