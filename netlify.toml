@@ -1,0 +1,22 @@
+# Configuration Netlify — hébergement statique de la PWA + micro-scheduler Web Push.
+# Voir docs/architecture/ADR-001.
+
+[build]
+  # SvelteKit adapter-static publie l'app dans `build/`.
+  command = "npm run build"
+  publish = "build"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# La planification de `send-reminders` est déclarée dans le fichier de la fonction
+# (export `config.schedule`). Elle peut aussi être surchargée ici si besoin :
+# [functions."send-reminders"]
+#   schedule = "*/15 * * * *"
+
+# SPA fallback : toute route inconnue sert l'app shell (routage côté client).
+[[redirects]]
+  from = "/*"
+  to = "/200.html"
+  status = 200

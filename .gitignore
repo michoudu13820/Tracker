@@ -1,3 +1,14 @@
+# --- SvelteKit / Node (PWA) ---
+node_modules/
+/.svelte-kit/
+/build/
+/.netlify/
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+vite.config.ts.timestamp-*
+
 # Miscellaneous
 *.class
 *.log

@@ -1,53 +1,57 @@
-# habit_tracker
+# Tracker
 
-Suivi d'habitudes personnel, 100% local (iPhone).
+Suivi d'habitudes personnel — **PWA SvelteKit**, données **100 % locales** (iPhone),
+rappels par **Web Push**.
 
-## Getting Started
+## Architecture en bref
 
-This project is a starting point for a Flutter application.
+- **App** : SvelteKit 2 + Svelte 5 (runes), `adapter-static` (SPA offline-first), installée
+  sur l'écran d'accueil de l'iPhone. Toutes les données métier (habitudes, tâches, historique,
+  stats) vivent dans **IndexedDB** — elles ne quittent jamais l'appareil.
+- **Rappels** : un **micro-scheduler serveur** (Netlify Functions + Netlify Blobs) déclenche
+  les notifications Web Push au bon moment. Il ne connaît **que** la souscription push et des
+  horodatages d'envoi — **aucune donnée métier**.
 
-A few resources to get you started if this is your first Flutter project:
+Détails et décisions : [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md)
+et [`docs/architecture/ADR-001`](docs/architecture/ADR-001-pwa-sveltekit-web-push-scheduler.md).
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Développement (Windows / PowerShell)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```powershell
+npm install
+npm run dev       # serveur de dev Vite
+npm run build     # build statique dans build/
+npm run preview   # prévisualise le build
+npm run check     # vérification de types (svelte-check)
+npm test          # tests unitaires (Vitest)
+```
 
-Agent "Scaffold Flutter app + CI GitHub iOS sideload" finished · 14m 36s
+## Web Push (clés VAPID)
 
-La CI est en place et validée avec de vrais runs verts. Voici le résumé :
+```powershell
+npx web-push generate-vapid-keys
+```
 
-C'est fait
+Copier `.env.example` en `.env` et renseigner `PUBLIC_VAPID_KEY`. Côté Netlify, définir
+`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (variables d'environnement, non
+commitées). Voir `.env.example`.
 
-Dépôt : https://github.com/michoudu13820/Tracker (public)
+## Installation sur iPhone
 
-Deux workflows opérationnels :
-- ci.yml — tests automatiques à chaque push (analyse + 9 tests, ~2 min) → run vert (https://github.com/michoudu13820/Tracker/actions/runs/31522855126)
-- build-ios.yml — build iOS manuel, produit un .ipa non signé (~3-5 min) → run vert (https://github.com/michoudu13820/Tracker/actions/runs/31523077544)
+Safari → **Partager** → **« Ajouter à l'écran d'accueil »**. L'installation est requise pour
+recevoir les notifications Web Push (iOS 16.4+ ; France/UE depuis iOS 17.4).
 
-Comment obtenir et installer l'app sur ton iPhone
+## Structure
 
-1. Déclencher un build :
-Va sur la page du workflow (https://github.com/michoudu13820/Tracker/actions/workflows/build-ios.yml) → Run workflow → attends ~3-5 min.
+```
+src/lib/domain    # logique métier pure (occurrences, rappels, résumé)
+src/lib/data      # IndexedDB (repositories)
+src/lib/stores    # état partagé (runes Svelte 5)
+src/lib/push      # souscription Web Push + upload de la fenêtre de rappels
+src/routes        # UI
+netlify/functions # micro-scheduler (register / unregister / send-reminders)
+US/               # User Stories
+docs/architecture # ADR + synthèse
+```
 
-2. Télécharger l'artefact :
-Ouvre le run terminé → section Artifacts en bas de page → télécharge habit_tracker-unsigned-ipa (nécessite d'être connecté à ton compte GitHub, même en repo public).
-
-3. Installer via AltStore ou SideStore :
-- Installe AltServer sur ton PC Windows (altstore.io) — pas besoin de Mac.
-- iPhone sur le même Wi-Fi que le PC.
-- Dézippe l'artefact, puis dans AltServer : Install .ipa → sélectionne le fichier → connecte-toi avec ton Apple ID gratuit quand demandé.
-- AltServer signe et installe l'app à ce moment-là (c'est lui qui gère la signature, pas la CI — aucun identifiant Apple n'est stocké sur GitHub).
-- Le certificat expire tous les 7 jours ; AltServer le renouvelle automatiquement tant que ton iPhone reste sur le même réseau que le PC (ou en Wi-Fi permanent avec SideStore).
-
-À savoir
-
-- Le repo est public : le code est visible par tous (mais aucun secret dedans). Repassable en privé plus tard si tu changes d'avis.
-- Seule étape non testée par l'agent : l'installation réelle via AltStore sur ton iPhone physique (nécessite ton action).
-- L'app actuelle est encore le squelette Flutter par défaut (compteur de démo) — l'implémentation du tracker d'habitudes reste à faire.
-
-Prochaine étape naturelle : lancer le développement des fonctionnalités (liste d'habitudes, fréquences, rappels) avec l'agent flutter-senior-dev. Tu veux qu'on enchaîne dessus ?
-
+Le suivi fonctionnel est dans [`US/BACKLOG.md`](US/BACKLOG.md).
