@@ -18,6 +18,13 @@ jobs:
     name: Typecheck, lint, test, build
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # SvelteKit's `$env/static/public` requires PUBLIC_* vars to be defined at build time
+    # (see docs/architecture/ARCHITECTURE.md). CI only needs the module to resolve for
+    # typecheck/build to succeed — these are non-secret placeholders, NOT the real VAPID
+    # key. The real value is set as a Netlify environment variable for production builds.
+    env:
+      PUBLIC_VAPID_KEY: 'ci-placeholder-not-a-real-key'
+      PUBLIC_SCHEDULER_URL: '/.netlify/functions'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
