@@ -74,6 +74,13 @@ depend_de: ["US-001"]
 > **Alors** je continue à recevoir de façon fiable les rappels des habitudes prévues dans les prochains jours
 > **Et** aucun rappel n'est perdu silencieusement du fait du nombre d'habitudes actives
 
+> **Note (2026-08-11) — pivot d'architecture** : cette US a été rédigée pour des
+> notifications **locales natives** (approche Flutter). Depuis, le projet a pivoté vers une
+> **PWA SvelteKit + Web Push** avec un micro-scheduler serveur (voir ADR-001). Le contrat
+> fonctionnel ci-dessus (scénarios Given/When/Then) **reste valable tel quel** : l'utilisateur
+> reçoit toujours un rappel au bon moment, même app fermée. Seules les **notes techniques**
+> plus bas ont été adaptées au nouveau mécanisme.
+
 ### Priorité
 Must — priorité la plus haute du backlog après US-001. Le benchmark identifie les rappels par notification comme le point le plus critique et le plus discriminant du projet (25 % de sa pondération) et recommande explicitement de les valider **tôt dans le développement, pas en fin de projet**, car ils reposent sur des mécanismes système (permission, planification, comportement app fermée) qui ne se découvrent fiablement qu'en le testant tôt sur un appareil réel. C'est un risque technique avéré, pas une préférence produit : cette US est donc avancée devant US-002/003/004/005/006 dans l'ordre d'implémentation recommandé, alors même qu'elle n'apporte pas de valeur visible supplémentaire à un utilisateur qui n'a pas encore de planning (US-004) à consulter.
 
@@ -82,12 +89,52 @@ XL — cette US couvre un périmètre fonctionnel large (déclenchement selon fr
 
 ### Dépendances
 - **US-001** : une habitude avec une fréquence définie (intervalle de jours ou jours de semaine) est le pré-requis minimal pour qu'il y ait quelque chose à rappeler. C'est la seule dépendance fonctionnelle stricte : cette US ne nécessite pas le planning quotidien (US-004) pour être livrée.
-- **ADR-005 — Notifications locales iOS : plugin, fuseaux et fenêtre glissante** (`docs/architecture/ADR-005-notifications-locales-ios.md`) : cadre les contraintes techniques (limite système de notifications programmées, fenêtre glissante de planification, gestion des fuseaux horaires, re-planification). Cette US fait passer cet ADR du statut « proposé » à un statut justifié par un besoin utilisateur réel ; l'ADR ne doit pas être implémenté avant que cette US ne soit priorisée.
+- **ADR-001 — PWA SvelteKit + Web Push avec micro-scheduler serveur** (`docs/architecture/ADR-001-pwa-sveltekit-web-push-scheduler.md`) : cadre le mécanisme technique des rappels (Web Push iOS, souscription servant d'identifiant sans compte, fenêtre glissante calculée côté client et re-poussée au serveur, scheduler cron Netlify). Cette US fait passer cet ADR du statut « proposé » à un statut justifié par un besoin utilisateur réel ; le micro-scheduler ne doit pas être implémenté avant que cette US ne soit priorisée. *(Remplace la dépendance à l'ancien ADR-005 « Notifications locales iOS », supprimé lors du pivot Flutter → PWA.)*
 
 ### Notes / hors périmètre
-- **Granularité choisie pour le MVP : activation/désactivation globale des rappels**, pas de réglage par habitude individuelle. C'est un choix délibéré pour rester simple à ce stade : une granularité par habitude (pouvoir couper le rappel d'une habitude précise sans désactiver les autres) est une amélioration possible mais n'est pas couverte ici — à envisager comme US ultérieure si le besoin est confirmé à l'usage.
-- **Heure de rappel** : cette US suppose une heure de rappel unique et globale (pas une heure différente par habitude), modifiable par l'utilisateur, avec une valeur par défaut raisonnable le matin. Ce choix est une hypothèse de simplicité à faire valider par l'équipe lors du raffinement ; il ne remet pas en cause le reste de l'US.
-- **Contenu exact de la notification** (texte affiché, action au tap) n'est pas spécifié précisément ici : au minimum le nom de l'habitude concernée doit être identifiable dans la notification.
-- La **validation complète de la fiabilité** (Scénarios 9 et 10, notamment application fermée / téléphone verrouillé) ne peut être observée de façon certaine qu'en conditions réelles sur un appareil physique, pas sur un simulateur/émulateur de développement. Cette contrainte de validation est actée dans l'ADR-005 et doit être anticipée dans le plan de développement (accès à un appareil réel dès cette US, pas en fin de projet).
-- Cette US ne couvre pas la remontée d'un historique des notifications envoyées, ni de statistiques sur les rappels (ouverts, ignorés, etc.).
-- Le nombre exact de notifications que le système peut programmer simultanément est une contrainte technique documentée dans l'ADR-005, pas un critère fonctionnel de cette US : le Scénario 10 exprime volontairement l'exigence de fiabilité sans exposer ce chiffre.
+
+> Notes techniques **mises à jour** pour le mécanisme Web Push (ADR-001). Ce qui suit
+> remplace les hypothèses de l'ancienne approche « notifications locales natives ».
+
+- **Mécanisme (rappel) : Web Push, pas de notification locale programmée.** iOS ne permet
+  pas de programmer une notification locale future. Le rappel repose sur : (1) le client
+  calcule localement les instants d'envoi (jours à occurrence × heure choisie) sur une
+  **fenêtre glissante** et les pousse au serveur ; (2) un **scheduler cron (Netlify)** envoie
+  le push au bon moment ; (3) le **service worker** affiche la notification, même app fermée.
+- **Pré-requis d'installation** : le Web Push iOS ne fonctionne que si la PWA est **installée
+  sur l'écran d'accueil** (iOS 16.4+ ; France/UE OK depuis iOS 17.4). Le Scénario 4 (permission)
+  doit donc, en amont, guider l'utilisateur à **installer l'app** avant même de demander la
+  permission notifications. Une PWA ouverte en simple onglet Safari **ne peut pas** recevoir
+  de push : à gérer comme un état explicite (pas d'échec silencieux, cf. Scénario 5).
+- **La limite des 64 notifications programmées n'existe plus** (elle était propre à
+  `UNUserNotificationCenter` natif). Le Scénario 10 (fiabilité à l'échelle) reste pertinent
+  mais son risque se déplace : ce n'est plus un plafond OS, c'est la **taille de la fenêtre
+  glissante uploadée** et la bonne exécution du scheduler.
+- **NOUVEAU RISQUE — la fiabilité dépend désormais du scheduler serveur** (Scénarios 9 et 10).
+  Avec le natif, l'OS garantissait le tir même app fermée. Désormais : si la fonction cron
+  Netlify ne s'exécute pas (incident, quota, mauvais déploiement), **aucun rappel ne part**,
+  sans que l'appareil le détecte. À surveiller (monitoring du cron) et à documenter comme
+  limite de fiabilité. La **latence** est aussi bornée par la granularité cron (≈15 min).
+- **Scénario 8 (pas de rappel si déjà fait) devient best-effort** : le serveur ne connaît
+  pas l'état de complétion (données 100 % locales). Un rappel peut partir même si l'habitude
+  est déjà cochée, **sauf si l'app a re-synchronisé sa fenêtre** (donc annulé le rappel du jour)
+  avant l'heure d'envoi. Comme le cas d'usage est justement « app fermée », cette suppression
+  ne peut être garantie. À trancher au raffinement : accepter ce best-effort pour le MVP, ou
+  formuler le rappel de façon neutre (« pense à tes habitudes du jour ») pour qu'il reste
+  pertinent même si une partie est faite.
+- **Identifiant sans compte** : la souscription Web Push (son `endpoint`) sert d'identifiant
+  implicite côté serveur (hash SHA-256 comme clé). Aucun email, aucun login, aucune donnée
+  métier ne remonte — seulement la souscription et des horodatages d'envoi (cf. ADR-001).
+- **Granularité choisie pour le MVP : activation/désactivation globale des rappels**, pas de
+  réglage par habitude individuelle. Choix délibéré de simplicité ; granularité par habitude =
+  amélioration ultérieure éventuelle.
+- **Heure de rappel** : heure unique et globale, modifiable, valeur par défaut le matin.
+- **Contenu de la notification** : volontairement **générique** dans cette architecture (ex.
+  « Tu as des habitudes prévues aujourd'hui »), car le détail des habitudes ne transite pas par
+  le serveur ; l'utilisateur ouvre l'app pour voir la liste locale. Au raffinement, décider si
+  un compteur non nominatif (ex. « 3 habitudes ») est acceptable côté vie privée.
+- La **validation complète de la fiabilité** (Scénarios 9 et 10, app fermée / verrouillée) ne
+  peut être observée que sur **iPhone réel avec la PWA installée** (pas en simulateur ni en
+  onglet Safari). Contrainte actée dans l'ADR-001, à anticiper dès cette US.
+- Cette US ne couvre pas l'historique des notifications envoyées ni de statistiques sur les
+  rappels (ouverts, ignorés, etc.).
