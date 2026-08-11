@@ -11,20 +11,28 @@
 		void habitsStore.load();
 	});
 
+	let pushError = $state('');
+
 	/** Bouton de test manuel : abonne le navigateur et programme un rappel immédiat (déjà dû). */
 	async function testPush() {
+		pushError = '';
 		if (!isPushSupported()) {
 			pushStatus = 'unsupported';
 			return;
 		}
 		pushStatus = 'sending';
-		const sub = await subscribe();
-		if (!sub) {
+		try {
+			const sub = await subscribe();
+			if (!sub) {
+				pushStatus = 'error';
+				return;
+			}
+			await pushSchedule(sub, [{ date: today, sendAt: Date.now() - 1000 }]);
+			pushStatus = 'ok';
+		} catch (err) {
 			pushStatus = 'error';
-			return;
+			pushError = err instanceof Error ? err.message : String(err);
 		}
-		await pushSchedule(sub, [{ date: today, sendAt: Date.now() - 1000 }]);
-		pushStatus = 'ok';
 	}
 </script>
 
@@ -55,7 +63,7 @@
 		{:else if pushStatus === 'unsupported'}
 			<p class="muted">Web Push indisponible : installe d'abord la PWA via « Ajouter à l'écran d'accueil ».</p>
 		{:else if pushStatus === 'error'}
-			<p class="muted">Permission refusée ou abonnement impossible.</p>
+			<p class="muted">Permission refusée ou abonnement impossible.{pushError ? ` (${pushError})` : ''}</p>
 		{:else if !isStandalone()}
 			<p class="muted">iOS : ouvre l'app depuis l'icône ajoutée à l'écran d'accueil pour que les notifications fonctionnent.</p>
 		{/if}
