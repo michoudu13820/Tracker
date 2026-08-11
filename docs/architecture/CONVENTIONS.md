@@ -112,7 +112,9 @@ Pyramide : **domaine (le gros du volume) → data → widgets → integration_te
 
 ## 8. Dépendances
 
-Actées : `flutter_riverpod`, `drift` + `sqlite3_flutter_libs` + `drift_dev`/`build_runner`, `mocktail` (dev), `flutter_lints`.
+Actées : `flutter_riverpod`, `drift` + `path`/`path_provider` + `drift_dev`/`build_runner`, `mocktail` (dev), `flutter_lints`.
+
+> **Note packaging (maj scaffold) :** `sqlite3_flutter_libs` n'est **plus** une dépendance. Depuis Drift 2.32 avec `sqlite3` 3.x, la lib SQLite native est embarquée automatiquement (build hooks) ; le package est passé EOL. Ne pas le réintroduire. Drift reste le choix acté (ADR-003) : seul le mécanisme d'embarquement natif a changé côté upstream.
 
 - Toute **nouvelle** dépendance doit être justifiée dans le résumé d'implémentation de l'US.
 - Pas de package pour ce que Dart ou Flutter fait déjà (`Result`/`Failure` sont maison, cf. ADR-004).

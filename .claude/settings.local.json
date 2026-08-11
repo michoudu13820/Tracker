@@ -32,7 +32,11 @@
       "WebFetch(domain:drift.simonbinder.eu)",
       "PowerShell(Remove-Item *)",
       "PowerShell(dart format *)",
-      "PowerShell(flutter doctor *)"
+      "PowerShell(flutter doctor *)",
+      "PowerShell(Get-ChildItem -Recurse -File -Path \"C:\\\\Users\\\\mmichelext\\\\Documents\\\\Perso\\\\Projet\\\\Tracker\\\\lib\",\"C:\\\\Users\\\\mmichelext\\\\Documents\\\\Perso\\\\Projet\\\\Tracker\\\\test\" | ForEach-Object { $_.FullName.Replace\\(\"C:\\\\Users\\\\mmichelext\\\\Documents\\\\Perso\\\\Projet\\\\Tracker\\\\\",\"\"\\) })",
+      "PowerShell(gh *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Get-ChildItem *)"
     ]
   }
 }
