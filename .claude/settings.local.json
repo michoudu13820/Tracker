@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\mmichelext\\\\Documents\\\\Perso\\\\Projet\\\\AppliProprete\" -Recurse -Directory | Where-Object { $_.FullName -notmatch 'node_modules|\\\\.git|\\\\.svelte-kit' } | Select-Object -ExpandProperty FullName)",
+      "PowerShell(Move-Item *)",
+      "PowerShell(npm run build)",
+      "PowerShell(npm run check)",
+      "PowerShell(npm run lint)",
+      "PowerShell(npm run test)",
+      "PowerShell(npm run test:unit *)",
+      "PowerShell(npx netlify-cli status)",
+      "PowerShell(npx netlify-cli deploy *)",
+      "PowerShell(npx netlify-cli link *)",
+      "PowerShell(Invoke-WebRequest *)",
+      "PowerShell(npm run *)",
+      "WebSearch",
+      "PowerShell(Get-ChildItem -Force | Select-Object Name, Mode | Format-Table -AutoSize; Write-Host \"---git---\"; git status 2>&1 | Select-Object -First 5; Write-Host \"---gh---\"; \\(Get-Command gh -ErrorAction SilentlyContinue\\) -ne $null; Write-Host \"---flutter---\"; \\(Get-Command flutter -ErrorAction SilentlyContinue\\) -ne $null)",
+      "PowerShell(winget *)",
+      "WebFetch(domain:storage.googleapis.com)",
+      "PowerShell($f = Get-Command flutter -ErrorAction SilentlyContinue; if \\($f\\) { \"flutter: $\\($f.Source\\)\"; flutter --version } else { \"flutter: ABSENT\" }; $d = Get-Command dart -ErrorAction SilentlyContinue; if \\($d\\) { \"dart: $\\($d.Source\\)\" } else { \"dart: ABSENT\" })",
+      "PowerShell(Get-ChildItem -Recurse -File .claude, docs | Select-Object -ExpandProperty FullName | ForEach-Object { $_.Replace\\(\"$PWD\\\\\", \"\"\\) })",
+      "PowerShell($f = Get-Command flutter -ErrorAction SilentlyContinue; if \\($f\\) { \"flutter: $\\($f.Source\\)\" } else { \"flutter: ABSENT du PATH de cette session\" })",
+      "PowerShell(flutter *)",
+      "PowerShell($paths = @\\(\"C:\\\\flutter\\\\bin\\\\flutter.bat\",\"C:\\\\src\\\\flutter\\\\bin\\\\flutter.bat\",\"$env:USERPROFILE\\\\flutter\\\\bin\\\\flutter.bat\",\"$env:LOCALAPPDATA\\\\flutter\\\\bin\\\\flutter.bat\",\"C:\\\\tools\\\\flutter\\\\bin\\\\flutter.bat\",\"C:\\\\dev\\\\flutter\\\\bin\\\\flutter.bat\",\"$env:USERPROFILE\\\\Documents\\\\flutter\\\\bin\\\\flutter.bat\"\\); foreach\\($p in $paths\\){ if\\(Test-Path $p\\){ Write-Output \"FOUND: $p\" } }; Write-Output \"--- searching common roots ---\"; Get-ChildItem -Path C:\\\\ -Filter \"flutter.bat\" -Recurse -Depth 4 -ErrorAction SilentlyContinue | Select-Object -First 5 FullName)",
+      "PowerShell($env:Path -split ';' | Where-Object { $_ -match 'flutter|dart' }; Write-Output \"--- where.exe ---\"; where.exe flutter 2>$null; where.exe dart 2>$null; Write-Output \"--- scoop/choco ---\"; if\\(Test-Path \"$env:USERPROFILE\\\\scoop\\\\apps\\\\flutter\"\\){ Get-ChildItem \"$env:USERPROFILE\\\\scoop\\\\apps\\\\flutter\" }; Get-ChildItem -Path \"C:\\\\Users\\\\mmichelext\" -Filter \"flutter.bat\" -Recurse -Depth 5 -ErrorAction SilentlyContinue | Select-Object -First 5 FullName)",
+      "PowerShell(Write-Output \"PUB_HOSTED_URL=$env:PUB_HOSTED_URL\"; Write-Output \"HTTP_PROXY=$env:HTTP_PROXY\"; Write-Output \"HTTPS_PROXY=$env:HTTPS_PROXY\"; Write-Output \"--- test pub.dev connectivity ---\"; try { $r = Invoke-WebRequest -Uri \"https://pub.dev\" -UseBasicParsing -TimeoutSec 15; Write-Output \"pub.dev status: $\\($r.StatusCode\\)\" } catch { Write-Output \"pub.dev FAILED: $\\($_.Exception.Message\\)\" })",
+      "PowerShell($env:Path = \"C:\\\\Users\\\\mmichelext\\\\scoop\\\\apps\\\\flutter\\\\current\\\\bin;C:\\\\Users\\\\mmichelext\\\\scoop\\\\apps\\\\flutter\\\\current\\\\bin\\\\cache\\\\dart-sdk\\\\bin;\" + $env:Path; flutter create . --project-name habit_tracker --org com.matthieumichel --platforms=ios,android --description \"Suivi d'habitudes personnel, 100% local \\(iPhone\\).\")",
+      "PowerShell([System.Environment]::GetEnvironmentVariable\\(\"Path\",\"User\"\\) -split \";\")",
+      "PowerShell(gh auth *)",
+      "PowerShell(flutter pub *)",
+      "WebFetch(domain:pub.dev)",
+      "WebFetch(domain:drift.simonbinder.eu)",
+      "PowerShell(Remove-Item *)",
+      "PowerShell(dart format *)",
+      "PowerShell(flutter doctor *)"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+# Analyse statique du projet Habit Tracker.
+#
+# Base flutter_lints, durcie volontairement (cf. skill scaffold-flutter, ADR-001) :
+# la clean architecture est ici plus stricte que ne l'exigerait la taille du
+# projet, pour la lisibilité long terme et le travail assisté par agents.
+# `public_member_api_docs` transforme l'exigence de documentation (CONVENTIONS §4)
+# en erreur d'analyse, donc en règle vérifiée par le quality gate.
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-raw-types: true
+  errors:
+    # Bruit connu du codegen Drift/Riverpod : @JsonKey & co. ciblent parfois un
+    # getter, ce que l'analyzer signale à tort sur les fichiers générés.
+    invalid_annotation_target: ignore
+  exclude:
+    # Le code généré (*.g.dart, *.drift.dart) n'a pas à passer nos lints stricts.
+    - "**/*.g.dart"
+    - "**/*.drift.dart"
+    - "**/*.freezed.dart"
+
+linter:
+  rules:
+    - public_member_api_docs        # dartdoc obligatoire sur l'API publique
+    - always_declare_return_types
+    - prefer_const_constructors
+    - avoid_print
