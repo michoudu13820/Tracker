@@ -1,0 +1,62 @@
+name: Build iOS (unsigned IPA)
+
+# Produces an unsigned .ipa on a macOS runner. No Apple Developer Program account
+# and no Mac are available locally, so this CI job is the only way to build for
+# iOS. The .ipa is intentionally unsigned (`--no-codesign`): AltStore/SideStore
+# perform the actual code-signing on install, using a free "Personal Team" Apple
+# ID, so no Apple credentials are ever needed here.
+#
+# Manual trigger by design (workflow_dispatch): keeps iOS builds intentional
+# rather than firing on every push, even though this repo is public and macOS
+# runner minutes are free/unlimited here. Also runs on version tags (v*) to
+# produce a build artifact per release.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    name: Build unsigned IPA
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS (release, no codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          cd build/ios/iphoneos
+          mkdir -p Payload
+          cp -r Runner.app Payload/Runner.app
+          zip -r -q habit_tracker-unsigned.ipa Payload
+          ls -la
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: habit_tracker-unsigned-ipa
+          path: build/ios/iphoneos/habit_tracker-unsigned.ipa
+          retention-days: 30
+          if-no-files-found: error
