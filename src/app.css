@@ -1,10 +1,47 @@
 :root {
-	--bg: #0f172a;
-	--surface: #1e293b;
-	--text: #e2e8f0;
-	--muted: #94a3b8;
-	--accent: #38bdf8;
-	color-scheme: dark;
+	/* Thème pastel (US-009) — source de vérité unique pour les couleurs de l'app. Toute
+	   nouvelle couleur (statut, surface, texte) doit être ajoutée ici, jamais codée en dur
+	   dans un composant, pour rester cohérente et facilement ajustable (voir US-009). */
+
+	/* Fond général : rose pâle, presque blanc (forte luminosité, faible saturation). */
+	--bg: #fdf2f6;
+	/* Surfaces distinctes du fond (cartes, formulaires, barre de nav) : légèrement plus
+	   claires que le fond + bordure douce pour rester identifiables sans se fondre dedans. */
+	--surface: #fffbfc;
+	--surface-border: #f6dde7;
+	--surface-shadow: 0 1px 3px rgba(190, 120, 150, 0.12);
+
+	/* Texte */
+	--text: #4a3540;
+	--muted: #7a6470;
+
+	/* Accent pastel (actions principales : boutons, sélection, liens actifs). */
+	--accent: #c9a6e6;
+	--accent-text: #3d2b52;
+
+	/* Couleurs de statut pastel (sémantique conservée : vert = fait, rouge = retard,
+	   violet = habitude), déclinées en teinte de fond douce + texte contrasté lisible. */
+	--success-bg: #d9f0df;
+	--success-text: #2f6b45;
+	--success-border: #a9dcb9;
+
+	--danger-bg: #fbdce3;
+	--danger-text: #9c3a52;
+	--danger-border: #f0aec0;
+
+	--warning-bg: #faeec2;
+	--warning-text: #7a5a16;
+	--warning-border: #edd48f;
+
+	--habit-border: #c9a6e6;
+	--habit-text: #6d4b93;
+
+	/* Cartes horizontales pleine largeur des listes (US-010) — rayon/padding centralisés
+	   pour un rendu identique entre le planning (/), /habitudes et /taches. */
+	--card-radius: 0.75rem;
+	--card-padding: 0.6rem 0.75rem;
+
+	color-scheme: light;
 }
 
 * {

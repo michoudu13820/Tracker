@@ -29,7 +29,10 @@ export class HabitsStore {
 		const idx = this.habits.findIndex((h) => h.id === habit.id);
 		if (idx >= 0) this.habits[idx] = habit;
 		else this.habits.push(habit);
-		await this.#repo.saveAll(this.habits);
+		// `this.habits` est un tableau $state : ses éléments sont enveloppés dans des Proxy
+		// réactifs, non clonables par `structuredClone` (utilisé en interne par idb-keyval
+		// pour écrire dans IndexedDB). On dé-proxifie avant persistance (BUG-001).
+		await this.#repo.saveAll($state.snapshot(this.habits));
 	}
 }
 

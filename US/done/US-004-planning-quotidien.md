@@ -4,7 +4,7 @@ id: US-004
 titre: Planning quotidien des habitudes et tâches
 date: 2026-08-09
 auteur: product-owner
-statut: prête
+statut: livrée
 priorite: Must
 estimation: L
 source: chat
@@ -81,3 +81,44 @@ US-001 (habitudes existantes à afficher), US-002 (tâches existantes à affiche
 - Le comportement de report automatique n'existe pas : une habitude non cochée un jour reste simplement « non faite » ce jour-là (pas de statut « en retard » pour les habitudes, contrairement aux tâches — cf. US-003).
 - Les notifications/rappels ne sont pas couverts par cette US.
 - L'affichage agrégé sur plusieurs jours (tableau de synthèse) fait l'objet d'une US séparée (US-005).
+
+## Implémentation
+
+Tous les scénarios sont couverts (1 à 8), avec un partage volontaire des tests entre couches :
+la sélection des occurrences dues (scénarios 2/3) était déjà testée exhaustivement au niveau
+domaine (`occurrences.test.ts`, existant avant cette US) ; cette US teste surtout l'assemblage
+(filtrage par date affichée, sections distinctes, navigation, cochage).
+
+### Fichiers créés
+- `src/routes/HabitCheckItem.svelte` — ligne d'habitude cochable, colocalisée (besoin propre au
+  planning : case à cocher, pas d'édition au clic contrairement à `/habitudes`).
+- `src/routes/HabitCheckItem.test.ts` — 4 tests (affichage, cochage, décochage, style barré —
+  scénarios 4/5).
+- `src/routes/page.test.ts` — 4 tests d'assemblage de la route `/` (scénarios 1/8, 2/7, 6, 4/5),
+  avec `idb-keyval` mocké en mémoire (pas d'IndexedDB réelle disponible en jsdom) pour exercer les
+  vrais stores/repositories sans toucher au navigateur.
+
+### Fichiers modifiés
+- `src/routes/+page.svelte` — remplace le placeholder : navigation jour précédent/suivant/« retour
+  à aujourd'hui », section « 🔁 Habitudes » (via `habitsStore.dueOn`, déjà fourni) et section
+  « ✅ Tâches » (via `tasksStore.onDate`, déjà fourni + `TaskItem` partagé avec `/taches`,
+  US-003). Le statut « en retard » d'une tâche reste calculé par rapport à la date réelle du jour
+  (`realToday`), indépendamment du jour affiché dans le planning — cohérent avec US-003 scénario
+  1bis qui explicite que le retard se juge par rapport à « aujourd'hui », pas au jour consulté.
+
+### Comment tester manuellement
+1. `npm run dev`, aller sur `/` (déjà la route par défaut).
+2. Vérifier que le jour affiché est aujourd'hui, avec deux sections visuellement distinctes.
+3. Créer une habitude par intervalle et une par jours de semaine (`/habitudes`), une tâche pour
+   aujourd'hui et une pour demain (`/taches`), revenir sur `/`.
+4. Cocher/décocher une habitude et une tâche → l'état visuel change immédiatement (coche, texte
+   barré).
+5. Naviguer « Jour suivant »/« Jour précédent » → les habitudes et tâches affichées changent selon
+   leur fréquence/date, avec l'état de complétion propre à chaque jour conservé.
+
+### Hypothèses produit tranchées
+- Aucune ambiguïté bloquante. Une seule précision technique tranchée : le statut « en retard »
+  d'une tâche affichée dans le planning se calcule toujours par rapport à la date réelle du jour
+  (horloge système), jamais par rapport au jour actuellement consulté dans le planning — c'est la
+  seule lecture cohérente avec US-003 scénario 1 qui prévoit explicitement l'affichage « en
+  retard » dans le planning d'une date passée.

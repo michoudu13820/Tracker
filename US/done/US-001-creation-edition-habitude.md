@@ -4,7 +4,7 @@ id: US-001
 titre: Création et édition d'une habitude
 date: 2026-08-09
 auteur: product-owner
-statut: prête
+statut: livrée
 priorite: Must
 estimation: M
 source: chat
@@ -71,3 +71,32 @@ Aucune
 - Aucune limite de nombre d'habitudes n'est spécifiée ici.
 - Aucune gestion de catégories, tags ou couleurs personnalisées au-delà de l'emoji n'est couverte.
 - Le rendu visuel exact de l'emoji selon les plateformes n'est pas un critère de cette US (dépend du rendu système).
+
+## Implémentation
+
+Tous les scénarios ci-dessus sont couverts et testés (✅ 1 à 6).
+
+### Fichiers créés
+- `src/lib/domain/habits.ts` — validation du brouillon (`validateHabitDraft`), construction/lecture de `Frequency` (`draftToFrequency`, `frequencyToDraft`), libellé de fréquence (`describeFrequency`). Pur, testé.
+- `src/lib/domain/habits.test.ts` — tests unitaires (12 cas) couvrant les scénarios 1, 2, 3, 5, 6.
+- `src/routes/habitudes/HabitForm.svelte` — formulaire de création/édition (colocalisé, utilisé uniquement par cette route) : nom, emoji libre (scénario 4), bascule exclusive intervalle/jours de semaine (scénario 3), messages d'erreur (scénario 5).
+- `src/routes/habitudes/HabitForm.test.ts` — tests de composant (@testing-library/svelte) couvrant les scénarios 1, 2, 3, 5, 6.
+
+### Fichiers modifiés
+- `src/routes/habitudes/+page.svelte` — remplace le placeholder : liste des habitudes (emoji + nom + fréquence lisible), bouton de création, clic sur une ligne pour éditer. Utilise `habitsStore` existant (aucune modification du store nécessaire, `upsert` couvrait déjà création et édition).
+- `vite.config.ts` — ajout de `resolve.conditions: ['browser']` sous Vitest (requis pour que les tests de composants Svelte se montent côté client, sinon erreur `mount() is not available on the server`) + `test.setupFiles` pour enregistrer les matchers jest-dom.
+
+### Fichier créé (infra tests)
+- `src/lib/test/setup.ts` — importe `@testing-library/jest-dom/vitest` pour les matchers (`toHaveTextContent`, `toBeChecked`, `toHaveValue`…) utilisés par les tests de composants futurs.
+
+### Comment tester manuellement
+1. `npm run dev`, aller sur `/habitudes`.
+2. Créer une habitude « Boire de l'eau » 💧 en mode intervalle = 2 jours → apparaît dans la liste avec « Tous les 2 jours ».
+3. Créer une habitude « Yoga » 🧘 en mode jours de semaine (lundi, mercredi, vendredi) → apparaît avec « lundi, mercredi, vendredi ».
+4. Essayer de valider sans nom, ou sans mode de fréquence → message d'erreur, rien n'est créé.
+5. Cliquer sur une habitude existante → formulaire pré-rempli ; changer de mode ; enregistrer → la liste reflète les nouvelles valeurs (l'historique de complétion, stocké séparément par `completionsStore`, n'est jamais touché par cette action).
+
+### Hypothèses produit tranchées (à valider si besoin)
+- **Ancrage de l'intervalle (`anchor`)** : non spécifié par l'US. Hypothèse retenue : l'ancrage est la date du jour à la création, et reste inchangé en édition (sauf si l'habitude n'avait pas de fréquence intervalle avant) — pour ne pas décaler rétroactivement les occurrences déjà cochées.
+- **Validité minimale du mode "jours de semaine"** : l'US ne précise pas explicitement qu'il faut au moins un jour coché pour valider (seul « avoir choisi l'un des deux modes » est mentionné). Hypothèse : un mode « jours de semaine » sans aucun jour sélectionné est traité comme incomplet et bloque la validation (cohérent avec l'esprit du scénario 5).
+- **Suppression** : hors périmètre confirmé par l'US elle-même, non implémentée.

@@ -4,7 +4,7 @@ id: US-003
 titre: Reprogrammation manuelle d'une tâche en retard
 date: 2026-08-09
 auteur: product-owner
-statut: prête
+statut: livrée
 priorite: Should
 estimation: S
 source: chat
@@ -64,3 +64,46 @@ US-002 (une tâche doit pouvoir être créée avant d'être en retard)
 - Pas de report automatique ni de règle de replanification implicite : la reprogrammation est toujours une action manuelle initiée par l'utilisateur.
 - Règle de bascule « en retard » tranchée : une tâche dont la date est dépassée devient « en retard » dès 00h00 le jour suivant sa date prévue. Une tâche datée du jour même n'est jamais « en retard » avant minuit.
 - Pas de notification ou de rappel automatique pour les tâches en retard dans cette US.
+
+## Implémentation
+
+Tous les scénarios sont couverts et testés (1, 1bis, 2, 3, 4).
+
+### Fichiers créés
+- `src/lib/components/TaskItem.svelte` — composant partagé (utilisé par `/taches` ET par `/`
+  dès US-004, d'où son placement dans `lib/components` plutôt que colocalisé) : case à cocher,
+  badge de statut (Faite / À faire / En retard, via `taskStatus` déjà testé en domaine), action
+  « Reprogrammer » visible uniquement si `status === 'overdue'`, formulaire de nouvelle date
+  validé via `validateReschedule` (ajouté en amont pendant US-002). Bouton « Modifier » optionnel
+  (prop `onEdit`) pour ne pas forcer cette action sur l'écran de planning à venir.
+- `src/lib/components/TaskItem.test.ts` — 10 tests couvrant tous les scénarios (statut, retard à
+  J+1 mais pas J, reprogrammation bloquée/validée, tâche faite jamais en retard, cochage, édition
+  optionnelle).
+- `src/lib/domain/dates.test.ts` — le fichier `dates.ts` était utilisé partout mais n'avait aucun
+  test dédié ; comblé à cette occasion (utilitaires génériques, pas spécifiques à cette US).
+
+### Fichiers modifiés
+- `src/lib/domain/dates.ts` — ajout de `formatIsoDateFr` (formatage `DD/MM/YYYY`, utilisé par
+  `TaskItem` et la liste des tâches) : utilitaire de date générique, donc placé ici plutôt que
+  dupliqué dans chaque composant.
+- `src/lib/components/index.ts` — export de `TaskItem`.
+- `src/routes/taches/+page.svelte` — utilise désormais `TaskItem` pour le rendu de chaque tâche
+  (statut, cochage via `completionsStore.setTaskDone`, reprogrammation via `tasksStore.upsert`
+  avec la nouvelle date, édition via `onEdit` → réouvre `TaskForm`).
+
+### Comment tester manuellement
+1. Créer une tâche datée d'hier (non cochée) sur `/taches` → badge « En retard » + bouton
+   « Reprogrammer » visibles.
+2. Créer une tâche datée d'aujourd'hui → badge « À faire », pas de bouton « Reprogrammer »
+   (bascule uniquement après minuit, scénario 1bis, vérifié par test unitaire avec une date
+   `today` injectée plutôt qu'en observant une vraie horloge).
+3. Cliquer « Reprogrammer » sans choisir de date puis valider → message d'erreur, rien ne change.
+4. Choisir une nouvelle date future puis valider → la tâche disparaît du retard, sa date est
+   mise à jour.
+5. Cocher une tâche en retard comme faite → le badge passe à « Faite », le bouton
+   « Reprogrammer » disparaît.
+
+### Hypothèses produit tranchées
+- Aucune ambiguïté bloquante : la règle de bascule à minuit était déjà explicitement tranchée par
+  l'US et implémentée en amont dans `isTaskOverdue`/`taskStatus` (domaine, testé lors de la
+  création initiale du projet).

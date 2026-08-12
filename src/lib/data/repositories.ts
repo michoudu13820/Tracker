@@ -111,19 +111,5 @@ export const idbRepositories = {
 	} satisfies SettingsRepository
 };
 
-/** Export/import JSON — filet de sécurité contre la purge du stockage iOS (voir setup-pwa). */
-export async function exportAllData(): Promise<string> {
-	const [habits, tasks, hc, tc, reminder, thresholds] = await Promise.all([
-		idbRepositories.habits.getAll(),
-		idbRepositories.tasks.getAll(),
-		idbRepositories.completions.getHabitCompletions(),
-		idbRepositories.completions.getTaskCompletions(),
-		idbRepositories.settings.getReminderSettings(),
-		idbRepositories.settings.getColorThresholds()
-	]);
-	return JSON.stringify(
-		{ version: 1, habits, tasks, habitCompletions: hc, taskCompletions: tc, reminder, thresholds },
-		null,
-		2
-	);
-}
+// Sauvegarde/restauration JSON (US-008) : voir `$lib/data/backup.ts` — concern isolé qui
+// connaît la forme complète du modèle, là où chaque repository ne connaît que son agrégat.

@@ -1,0 +1,60 @@
+<script lang="ts">
+	/**
+	 * Ligne d'habitude cochable dans le planning quotidien (US-004). Colocalisée : utilisée
+	 * uniquement par la route « Aujourd'hui » (`/`) — la liste des habitudes (`/habitudes`)
+	 * a un besoin différent (édition au clic, pas de cochage).
+	 */
+	import type { Habit } from '$lib/domain/types';
+
+	interface Props {
+		habit: Habit;
+		done: boolean;
+		onToggle: (habitId: string, done: boolean) => void;
+	}
+
+	let { habit, done, onToggle }: Props = $props();
+</script>
+
+<li class="habit-item">
+	<label class="row">
+		<input
+			type="checkbox"
+			checked={done}
+			onchange={(e) => onToggle(habit.id, (e.currentTarget as HTMLInputElement).checked)}
+			aria-label={`Marquer « ${habit.name} » comme faite`}
+		/>
+		<span class="emoji" aria-hidden="true">{habit.emoji}</span>
+		<span class="name" class:done>{habit.name}</span>
+	</label>
+</li>
+
+<style>
+	.habit-item {
+		background: var(--surface);
+		border: 1px solid var(--surface-border);
+		border-left: 4px solid var(--habit-border);
+		border-radius: var(--card-radius);
+		box-shadow: var(--surface-shadow);
+		padding: var(--card-padding);
+		width: 100%;
+	}
+	.row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		min-height: 44px;
+	}
+	.emoji {
+		font-size: 1.3rem;
+	}
+	.name {
+		font-weight: 600;
+		flex: 1;
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+	.name.done {
+		text-decoration: line-through;
+		color: var(--muted);
+	}
+</style>

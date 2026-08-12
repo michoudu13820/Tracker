@@ -4,7 +4,7 @@ id: US-005
 titre: Résumé "Habit tracker" en tableau sur une période
 date: 2026-08-09
 auteur: product-owner
-statut: prête
+statut: livrée
 priorite: Should
 estimation: L
 source: chat
@@ -97,3 +97,57 @@ US-001 (habitudes à synthétiser), US-002 (tâches à synthétiser), US-004 (so
 - Granularité tranchée : périodes « semaine » et « mois » → colonnes en jours, cellule binaire (coché/non coché) sans pourcentage ni couleur graduelle ; période « année » → colonnes en mois, cellule affichant un pourcentage de complétion coloré (vert ≥ 80 %, jaune [40 % ; 80 %[, rouge < 40 % par défaut).
 - Cette US livre le rendu avec les **seuils par défaut (80 % / 40 %) codés en dur**, sans exposer de réglage à l'utilisateur. Le **paramétrage de ces seuils par l'utilisateur** (écran de réglages) fait l'objet d'une US dédiée séparée (voir US-006), afin que US-005 reste livrable indépendamment.
 - Le rendu visuel exact des couleurs (nuances précises, accessibilité daltonisme) n'est pas spécifié ici et relève d'un détail UI à trancher avec le design.
+
+## Implémentation
+
+Tous les scénarios sont couverts et testés (1, 2, 3, 3ter, 3quater, 3bis, 4, 4bis, 5, 6, 6bis, 7).
+
+### Fichiers créés
+- `src/routes/resume/WeekMonthTable.svelte` — tableau semaine/mois (colonnes = jours, cellule
+  binaire via `habitCellStatus`, ligne « Tâches » via `taskDayPercent`).
+- `src/routes/resume/WeekMonthTable.test.ts` — couvre scénarios 1, 2 (binaire, pas de %), 4, 5, 6.
+- `src/routes/resume/YearTable.svelte` — tableau année (colonnes = 12 mois, cellule % + couleur
+  via `habitMonthPercent`/`colorFor`, ligne « Tâches » via `taskMonthPercent`).
+- `src/routes/resume/YearTable.test.ts` — couvre scénarios 3, 3ter (seuils par défaut), 3quater
+  (seuils personnalisés), 4bis, 5, 6bis.
+- `src/routes/resume/page.test.ts` — couvre l'assemblage : scénario 1 (semaine par défaut),
+  2/3bis (mois reste en colonnes-jours), 3/3bis (seule l'année bascule en colonnes-mois),
+  7 (navigation).
+- `src/lib/domain/summary.test.ts` — 20 tests pour toutes les fonctions d'agrégation ajoutées.
+
+### Fichiers modifiés
+- `src/lib/domain/dates.ts` — ajout d'utilitaires génériques nécessaires à l'agrégation par
+  période : `weekdayOf`, `startOfWeek` (lundi), `startOfMonth`, `daysInMonth`, `addMonths`,
+  `addYears`, `monthLabelFr`. Combiné avec la création de `dates.test.ts` (le fichier n'avait
+  aucun test dédié malgré son usage répandu — comblé à cette occasion, y compris pour les
+  fonctions pré-existantes `toIsoDate`/`fromIsoDate`/`daysBetween`/`addDays`/`formatIsoDateFr`).
+- `src/lib/domain/summary.ts` — ajout de `weekDates`, `monthDates`, `yearMonths`,
+  `habitCellStatus`, `habitMonthPercent`, `taskDayPercent`, `taskMonthPercent`,
+  `shiftReference` (navigation). `colorFor`/`areThresholdsValid`/`DEFAULT_THRESHOLDS`
+  pré-existants, inchangés.
+- `src/routes/resume/+page.svelte` — remplace le placeholder : sélecteur semaine/mois/année,
+  navigation précédent/suivant, rendu conditionnel `WeekMonthTable` (semaine/mois) ou
+  `YearTable` (année). Charge `habitsStore`, `tasksStore`, `completionsStore` et
+  `settingsStore` (pour les seuils).
+
+### Comment tester manuellement
+1. Créer 2-3 habitudes avec des fréquences différentes et quelques tâches, cocher certains
+   jours sur `/`.
+2. Aller sur `/resume` : la vue par défaut est « Semaine », tableau binaire (✓/·), cellules
+   neutres grisées pour les jours non prévus par habitude.
+3. Basculer « Mois » → même rendu binaire mais sur tout le mois.
+4. Basculer « Année » → colonnes mensuelles, pourcentages colorés (vert/jaune/rouge selon
+   80 %/40 %), cellule neutre grisée pour un mois sans occurrence prévue.
+5. Naviguer précédent/suivant → le tableau et le libellé de période se mettent à jour.
+
+### Hypothèses produit tranchées
+- **Début de semaine = lundi** (convention française/européenne) : non précisé explicitement par
+  l'US, tranché ainsi faute d'indication contraire.
+- **Seuils de couleur branchés sur `settingsStore.thresholds` plutôt que sur la constante
+  `DEFAULT_THRESHOLDS` en dur** : l'US demande explicitement des seuils « codés en dur » sans
+  réglage exposé dans *cette* US — c'est bien le cas ici, aucune UI de réglage n'est livrée dans
+  US-005 ; le store expose déjà `80/40` par défaut avant toute personnalisation. Ce choix
+  d'implémentation évite un second câblage à refaire lors de US-006 (qui ajoutera l'écran de
+  réglage) sans changer le comportement observable de US-005 prise isolément.
+- **Arrondi des pourcentages** : `Math.round` (ex. 66,67 % → 67 %), non précisé par l'US, choix
+  raisonnable pour un affichage entier lisible.

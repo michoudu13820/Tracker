@@ -43,7 +43,16 @@
       "WebFetch(domain:pushalert.co)",
       "PowerShell(netlify *)",
       "PowerShell(Out-File *)",
-      "PowerShell(npm test *)"
+      "PowerShell(npm test *)",
+      "PowerShell(node -e \"console.log\\(require\\('C:/Users/mmichelext/Documents/Perso/Projet/Tracker/node_modules/@sveltejs/kit/package.json'\\).version\\)\"; Test-Path 'C:/Users/mmichelext/Documents/Perso/Projet/Tracker/node_modules/@sveltejs/kit/src/runtime/app/state')",
+      "PowerShell(Get-ChildItem -Recurse -File -Path \"C:\\\\Users\\\\mmichelext\\\\Documents\\\\Perso\\\\Projet\\\\Tracker\\\\src\" | Select-Object FullName | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem -Recurse -File -Path \"C:\\\\Users\\\\mmichelext\\\\Documents\\\\Perso\\\\Projet\\\\Tracker\\\\US\" | Select-Object FullName | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem -Recurse -File -Path \"C:\\\\Users\\\\mmichelext\\\\Documents\\\\Perso\\\\Projet\\\\Tracker\\\\.claude\" | Select-Object FullName | ForEach-Object { $_.FullName })",
+      "PowerShell(New-Item *)",
+      "Skill(fewer-permission-prompts)",
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); & \"C:\\\\Users\\\\MMICHE~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-mmichelext-Documents-Perso-Projet-Tracker\\\\c480305e-5b89-4088-a352-aa7c85265445\\\\scratchpad\\\\scan_transcripts.ps1\")",
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); & \"C:\\\\Users\\\\MMICHE~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-mmichelext-Documents-Perso-Projet-Tracker\\\\c480305e-5b89-4088-a352-aa7c85265445\\\\scratchpad\\\\scan_patterns.ps1\")",
+      "PowerShell(Select-String *)"
     ]
   }
 }

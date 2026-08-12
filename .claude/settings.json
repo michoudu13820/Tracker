@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(npm run lint *)",
+      "PowerShell(npm run check *)",
+      "PowerShell(npm run test *)",
+      "PowerShell(npx vitest run *)",
+      "PowerShell(npm run build *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Get-Content *)",
+      "PowerShell(git log *)",
+      "PowerShell(Select-String *)",
+      "PowerShell(git status *)",
+      "PowerShell(Get-Command *)",
+      "PowerShell(gh auth status)",
+      "PowerShell(node --version)",
+      "PowerShell(npm --version)",
+      "PowerShell(netlify status *)",
+      "PowerShell(npx netlify-cli status *)",
+      "PowerShell(gh run list *)",
+      "PowerShell(npm test *)",
+      "PowerShell(git diff *)",
+      "PowerShell(git show *)",
+      "PowerShell(npm run test:unit *)",
+      "PowerShell(gh run watch *)",
+      "PowerShell(gh run view *)"
+    ]
+  }
+}
