@@ -1,0 +1,185 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi } from 'vitest';
+import { RemindersStore } from './reminders.store.svelte';
+import type { PushClient } from '$lib/push/client';
+import { toIsoDate } from '$lib/domain/dates';
+import type { Habit, HabitCompletion, ReminderSettings } from '$lib/domain/types';
+
+/**
+ * Tests de `RemindersStore` (US-007) — le client push (`$lib/push/client`) est injecté
+ * (même patron que les repositories) : aucun navigateur/service worker réel requis.
+ */
+function fakeSubscription(endpoint = 'https://push.example/abc'): PushSubscription {
+	return { endpoint } as unknown as PushSubscription;
+}
+
+function fakeClient(overrides: Partial<PushClient> = {}): PushClient & {
+	scheduled: Array<{ endpoint: string; reminders: unknown[] }>;
+	unsubscribed: string[];
+} {
+	const scheduled: Array<{ endpoint: string; reminders: unknown[] }> = [];
+	const unsubscribed: string[] = [];
+	return {
+		scheduled,
+		unsubscribed,
+		isPushSupported: () => true,
+		isStandalone: () => true,
+		notificationPermission: () => 'default',
+		subscribe: vi.fn(async () => fakeSubscription()),
+		getExistingSubscription: vi.fn(async () => null),
+		pushSchedule: vi.fn(async (subscription, reminders) => {
+			scheduled.push({ endpoint: subscription.endpoint, reminders });
+		}),
+		unsubscribe: vi.fn(async (subscription) => {
+			unsubscribed.push(subscription.endpoint);
+		}),
+		...overrides
+	};
+}
+
+const settingsEnabled: ReminderSettings = { enabled: true, time: '08:00', timezone: 'Europe/Paris' };
+const habit: Habit = {
+	id: 'h1',
+	name: "Boire de l'eau",
+	emoji: '💧',
+	createdAt: '2026-08-10',
+	frequency: { kind: 'interval', days: 1, anchor: '2026-08-10' }
+};
+
+describe('RemindersStore.availability (US-007 scénario 3bis)', () => {
+	it('unsupported si le navigateur ne supporte pas le Web Push', () => {
+		const store = new RemindersStore(fakeClient({ isPushSupported: () => false }));
+		expect(store.availability()).toBe('unsupported');
+	});
+
+	it('needs-install si la PWA n\'est pas installée sur l\'écran d\'accueil', () => {
+		const store = new RemindersStore(fakeClient({ isStandalone: () => false }));
+		expect(store.availability()).toBe('needs-install');
+	});
+
+	it('available si supporté et installé', () => {
+		const store = new RemindersStore(fakeClient());
+		expect(store.availability()).toBe('available');
+	});
+});
+
+describe('RemindersStore.enable (US-007 scénarios 4 et 5)', () => {
+	it('scénario 4 — permission accordée : souscrit puis pousse la fenêtre de rappels', async () => {
+		const client = fakeClient();
+		const store = new RemindersStore(client);
+
+		const sub = await store.enable([habit], settingsEnabled);
+
+		expect(sub).not.toBeNull();
+		expect(store.subscription).not.toBeNull();
+		expect(client.scheduled).toHaveLength(1);
+		expect(store.syncStatus).toBe('ok');
+	});
+
+	it('scénario 5 — permission refusée : aucune souscription, aucun rappel programmé silencieusement', async () => {
+		const client = fakeClient({ subscribe: vi.fn(async () => null) });
+		const store = new RemindersStore(client);
+
+		const sub = await store.enable([habit], settingsEnabled);
+
+		expect(sub).toBeNull();
+		expect(store.subscription).toBeNull();
+		expect(client.scheduled).toHaveLength(0);
+	});
+});
+
+describe('RemindersStore.disable (US-007 scénario 6)', () => {
+	it('désinscrit côté serveur et réinitialise la souscription locale', async () => {
+		const client = fakeClient();
+		const store = new RemindersStore(client);
+		await store.enable([habit], settingsEnabled);
+
+		await store.disable();
+
+		expect(store.subscription).toBeNull();
+		expect(client.unsubscribed).toHaveLength(1);
+	});
+
+	it('ne fait rien si aucune souscription active', async () => {
+		const client = fakeClient();
+		const store = new RemindersStore(client);
+
+		await store.disable();
+
+		expect(client.unsubscribed).toHaveLength(0);
+	});
+});
+
+describe('RemindersStore.sync (US-007 scénarios 7/8/10)', () => {
+	it('recalcule et repousse la fenêtre avec la nouvelle heure choisie', async () => {
+		const client = fakeClient();
+		const store = new RemindersStore(client);
+		await store.enable([habit], settingsEnabled);
+
+		await store.sync([habit], { ...settingsEnabled, time: '20:00' });
+
+		expect(client.scheduled).toHaveLength(2);
+	});
+
+	it('best-effort (scénario 8) : ne programme plus le jour du rappel une fois marqué complet', async () => {
+		const client = fakeClient();
+		const store = new RemindersStore(client);
+		// Heure tardive pour éviter tout flake proche de minuit lors de l'exécution des tests.
+		const settingsLate: ReminderSettings = { ...settingsEnabled, time: '23:59' };
+		await store.enable([habit], settingsLate);
+
+		const today = toIsoDate(new Date());
+		const completions: HabitCompletion[] = [{ habitId: habit.id, date: today, done: true }];
+		await store.sync([habit], settingsLate, completions);
+
+		const last = client.scheduled.at(-1);
+		expect(last?.reminders.some((r) => (r as { date: string }).date === today)).toBe(false);
+	});
+
+	it('ne fait rien sans souscription active (pas d\'échec silencieux, simplement no-op)', async () => {
+		const client = fakeClient();
+		const store = new RemindersStore(client);
+
+		await store.sync([habit], settingsEnabled);
+
+		expect(client.scheduled).toHaveLength(0);
+		expect(store.syncStatus).toBe('idle');
+	});
+
+	it('reflète une erreur réseau via syncStatus (pas d\'échec silencieux)', async () => {
+		const client = fakeClient({
+			pushSchedule: vi.fn(async () => {
+				throw new Error('network down');
+			})
+		});
+		const store = new RemindersStore(client);
+		await store.enable([habit], settingsEnabled);
+
+		expect(store.syncStatus).toBe('error');
+	});
+});
+
+describe('RemindersStore.restore (US-007 scénario 9, reprise au démarrage)', () => {
+	it('retrouve une souscription existante si disponible', async () => {
+		const existing = fakeSubscription();
+		const client = fakeClient({ getExistingSubscription: vi.fn(async () => existing) });
+		const store = new RemindersStore(client);
+
+		await store.restore();
+
+		// `store.subscription` est un champ $state : la valeur assignée est enveloppée dans un
+		// Proxy réactif, donc pas la même référence — comparaison structurelle (mêmes causes
+		// que BUG-001, voir HabitsStore/SettingsStore).
+		expect(store.subscription).toEqual(existing);
+	});
+
+	it('ne tente rien si le push n\'est pas disponible (PWA non installée)', async () => {
+		const client = fakeClient({ isStandalone: () => false, getExistingSubscription: vi.fn(async () => fakeSubscription()) });
+		const store = new RemindersStore(client);
+
+		await store.restore();
+
+		expect(store.subscription).toBeNull();
+		expect(client.getExistingSubscription).not.toHaveBeenCalled();
+	});
+});

@@ -98,6 +98,34 @@ describe('YearTable (US-005 scénarios 3/3ter/3quater/6bis)', () => {
 	});
 });
 
+describe('YearTable — habitude à cible chiffrée (US-019 scénario 2/3)', () => {
+	it('affiche un pourcentage coloré selon les seuils, comme une habitude case à cocher', () => {
+		const targetHabit: Habit = {
+			id: 'h2',
+			name: "Boire de l'eau",
+			emoji: '💧',
+			frequency: { kind: 'interval', days: 1, anchor: '2026-01-01' },
+			createdAt: '2026-01-01',
+			target: { value: 1.5, unit: 'L' }
+		};
+		const completions: HabitCompletion[] = Array.from({ length: 31 }, (_, i) => ({
+			habitId: 'h2',
+			date: `2026-01-${String(i + 1).padStart(2, '0')}`,
+			done: true
+		}));
+		render(YearTable, {
+			months,
+			habits: [targetHabit],
+			habitCompletions: completions,
+			tasks: [],
+			taskCompletions: [],
+			thresholds: DEFAULT_THRESHOLDS
+		});
+		const cell = screen.getByLabelText("Boire de l'eau — janvier — 100%");
+		expect(cell).toHaveAttribute('data-color', 'green');
+	});
+});
+
 describe('YearTable — indicateur de tâches (US-005 scénarios 4bis/5)', () => {
 	it('affiche le pourcentage de tâches validées par mois (scénario 4bis)', () => {
 		const tasks: Task[] = [

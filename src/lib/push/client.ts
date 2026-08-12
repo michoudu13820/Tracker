@@ -34,6 +34,12 @@ export function isStandalone(): boolean {
 	);
 }
 
+/** État de permission courant, sans jamais déclencher de demande (lecture pure). */
+export function notificationPermission(): NotificationPermission | 'unsupported' {
+	if (typeof Notification === 'undefined') return 'unsupported';
+	return Notification.permission;
+}
+
 /** Demande la permission et retourne la souscription push (ou null si refus/non supporté). */
 export async function subscribe(): Promise<PushSubscription | null> {
 	if (!isPushSupported()) return null;
@@ -49,6 +55,17 @@ export async function subscribe(): Promise<PushSubscription | null> {
 		userVisibleOnly: true,
 		applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY) as BufferSource
 	});
+}
+
+/**
+ * Retourne la souscription push déjà existante (sans jamais demander la permission).
+ * Utilisé au démarrage de l'app pour retrouver l'état d'un abonnement déjà accepté lors
+ * d'une session précédente (la souscription en mémoire ne survit pas à un rechargement).
+ */
+export async function getExistingSubscription(): Promise<PushSubscription | null> {
+	if (!isPushSupported() || Notification.permission !== 'granted') return null;
+	const reg = await navigator.serviceWorker.ready;
+	return reg.pushManager.getSubscription();
 }
 
 /**
@@ -76,6 +93,31 @@ export async function unsubscribe(subscription: PushSubscription): Promise<void>
 	});
 	await subscription.unsubscribe();
 }
+
+/**
+ * Interface du client push, pour injection dans `RemindersStore` (mockable en test — même
+ * patron que les repositories de `$lib/data`, voir CONVENTIONS.md et `create-store`).
+ */
+export interface PushClient {
+	isPushSupported(): boolean;
+	isStandalone(): boolean;
+	notificationPermission(): NotificationPermission | 'unsupported';
+	subscribe(): Promise<PushSubscription | null>;
+	getExistingSubscription(): Promise<PushSubscription | null>;
+	pushSchedule(subscription: PushSubscription, reminders: ScheduledReminder[]): Promise<void>;
+	unsubscribe(subscription: PushSubscription): Promise<void>;
+}
+
+/** Implémentation réelle (navigateur), utilisée par défaut par `RemindersStore`. */
+export const defaultPushClient: PushClient = {
+	isPushSupported,
+	isStandalone,
+	notificationPermission,
+	subscribe,
+	getExistingSubscription,
+	pushSchedule,
+	unsubscribe
+};
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
 	const padding = '='.repeat((4 - (base64String.length % 4)) % 4);

@@ -2,6 +2,7 @@ import type {
 	ColorThresholds,
 	Habit,
 	HabitCompletion,
+	HabitProgress,
 	ReminderSettings,
 	Task,
 	TaskCompletion
@@ -32,16 +33,21 @@ export interface BackupData {
 	taskCompletions: TaskCompletion[];
 	reminder: ReminderSettings;
 	thresholds: ColorThresholds;
+	/** Progression cumulée quotidienne des habitudes à cible chiffrée (US-018). Optionnel côté
+	 * import pour rester compatible avec les exports réalisés avant son introduction : traité
+	 * comme un tableau vide si absent (voir `isValidBackup`/`restoreBackup`). */
+	habitProgress?: HabitProgress[];
 }
 
 /** Assemble l'ensemble des données locales en une enveloppe sérialisable (US-008 scénario 1/2). */
 export async function collectBackup(): Promise<BackupData> {
-	const [habits, tasks, habitCompletions, taskCompletions, reminder, thresholds] =
+	const [habits, tasks, habitCompletions, taskCompletions, habitProgress, reminder, thresholds] =
 		await Promise.all([
 			idbRepositories.habits.getAll(),
 			idbRepositories.tasks.getAll(),
 			idbRepositories.completions.getHabitCompletions(),
 			idbRepositories.completions.getTaskCompletions(),
+			idbRepositories.completions.getHabitProgress(),
 			idbRepositories.settings.getReminderSettings(),
 			idbRepositories.settings.getColorThresholds()
 		]);
@@ -51,6 +57,7 @@ export async function collectBackup(): Promise<BackupData> {
 		tasks,
 		habitCompletions,
 		taskCompletions,
+		habitProgress,
 		reminder,
 		thresholds
 	};
@@ -83,6 +90,7 @@ export function isValidBackup(value: unknown): value is BackupData {
 		Array.isArray(v.tasks) &&
 		Array.isArray(v.habitCompletions) &&
 		Array.isArray(v.taskCompletions) &&
+		(v.habitProgress === undefined || Array.isArray(v.habitProgress)) &&
 		typeof v.reminder === 'object' &&
 		v.reminder !== null &&
 		typeof v.thresholds === 'object' &&
@@ -115,6 +123,7 @@ export async function restoreBackup(data: BackupData): Promise<void> {
 		idbRepositories.tasks.saveAll(data.tasks),
 		idbRepositories.completions.saveHabitCompletions(data.habitCompletions),
 		idbRepositories.completions.saveTaskCompletions(data.taskCompletions),
+		idbRepositories.completions.saveHabitProgress(data.habitProgress ?? []),
 		idbRepositories.settings.saveReminderSettings(data.reminder),
 		idbRepositories.settings.saveColorThresholds(data.thresholds)
 	]);

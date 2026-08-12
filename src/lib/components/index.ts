@@ -7,3 +7,5 @@
  */
 export { default as TabBar } from './TabBar.svelte';
 export { default as TaskItem } from './TaskItem.svelte';
+export { default as SwipeToDelete } from './SwipeToDelete.svelte';
+export { default as ConfirmDialog } from './ConfirmDialog.svelte';

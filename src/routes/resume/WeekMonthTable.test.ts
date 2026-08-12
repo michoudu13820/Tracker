@@ -46,6 +46,39 @@ describe('WeekMonthTable (US-005 scénarios 1/2/6)', () => {
 	});
 });
 
+describe('WeekMonthTable — habitude à cible chiffrée (US-019 scénario 1/3)', () => {
+	const targetHabit: Habit = {
+		id: 'h2',
+		name: "Boire de l'eau",
+		emoji: '💧',
+		frequency: { kind: 'weekdays', weekdays: [1, 3] }, // lundi, mercredi
+		createdAt: '2026-01-01',
+		target: { value: 1.5, unit: 'L' }
+	};
+
+	it('affiche une cellule binaire fait/non fait, sans quantité ni pourcentage', () => {
+		const completions: HabitCompletion[] = [{ habitId: 'h2', date: '2026-08-10', done: true }];
+		render(WeekMonthTable, {
+			dates,
+			habits: [targetHabit],
+			habitCompletions: completions,
+			tasks: [],
+			taskCompletions: []
+		});
+
+		expect(screen.getByLabelText("Boire de l'eau — 10/08 — done")).toHaveAttribute(
+			'data-status',
+			'done'
+		);
+		expect(screen.getByLabelText("Boire de l'eau — 12/08 — not-done")).toHaveAttribute(
+			'data-status',
+			'not-done'
+		);
+		expect(screen.queryByText(/1,5/)).toBeNull();
+		expect(screen.queryByText(/%/)).toBeNull();
+	});
+});
+
 describe('WeekMonthTable — indicateur de tâches (US-005 scénarios 4/5)', () => {
 	const tasks: Task[] = [
 		{ id: 't1', name: 'A', date: '2026-08-10', createdAt: '2026-08-01' },

@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { isTaskOverdue, taskStatus, tasksOn, validateTaskDraft, validateReschedule } from './tasks';
+import {
+	isTaskDeleted,
+	isTaskOverdue,
+	taskRecordStatus,
+	taskStatus,
+	tasksOn,
+	validateTaskDraft,
+	validateReschedule,
+	visibleTasks
+} from './tasks';
 import type { Task } from './types';
 
 const task: Task = {
@@ -58,6 +67,24 @@ describe('validateTaskDraft (US-002 scénario 3)', () => {
 	it('signale les deux champs si les deux manquent', () => {
 		const result = validateTaskDraft({ name: '', date: null });
 		expect(result.errors).toHaveLength(2);
+	});
+});
+
+describe('taskRecordStatus / visibleTasks (US-014 — soft-delete, rétro-compatibilité)', () => {
+	it("résout 'active' pour une tâche sans champ status (persistée avant la fonctionnalité)", () => {
+		expect(taskRecordStatus(task)).toBe('active');
+		expect(isTaskDeleted(task)).toBe(false);
+	});
+
+	it("résout 'deleted' quand le statut est explicite", () => {
+		const deleted: Task = { ...task, status: 'deleted' };
+		expect(taskRecordStatus(deleted)).toBe('deleted');
+		expect(isTaskDeleted(deleted)).toBe(true);
+	});
+
+	it('exclut les tâches supprimées de la liste visible (US-014 scénario 3)', () => {
+		const other: Task = { ...task, id: 't2', status: 'deleted' };
+		expect(visibleTasks([task, other])).toEqual([task]);
 	});
 });
 

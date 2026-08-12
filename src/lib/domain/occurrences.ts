@@ -1,5 +1,6 @@
 import type { Habit, IsoDate, Weekday } from './types';
 import { daysBetween, fromIsoDate } from './dates';
+import { isHabitActive } from './habits';
 
 /**
  * Cœur métier : une habitude est-elle prévue un jour donné selon sa fréquence ?
@@ -20,7 +21,11 @@ export function isDueOn(habit: Habit, date: IsoDate): boolean {
 	return delta % frequency.days === 0;
 }
 
-/** Liste les habitudes prévues un jour donné. */
+/**
+ * Liste les habitudes prévues un jour donné, pour le planning (US-004). N'inclut que les
+ * habitudes actives : une habitude en pause (US-015) ou supprimée (US-013) n'apparaît plus
+ * dans le planning, quel que soit le jour consulté, même si elle serait due selon sa fréquence.
+ */
 export function habitsDueOn(habits: Habit[], date: IsoDate): Habit[] {
-	return habits.filter((h) => isDueOn(h, date));
+	return habits.filter((h) => isHabitActive(h) && isDueOn(h, date));
 }

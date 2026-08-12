@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import Page from './+page.svelte';
+import PlanningPage from '../+page.svelte';
 import { habitsStore } from '$lib/stores/habits.store.svelte';
 import { tasksStore } from '$lib/stores/tasks.store.svelte';
 import { completionsStore } from '$lib/stores/completions.store.svelte';
@@ -93,5 +94,40 @@ describe('Résumé — /resume (US-005)', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Période précédente' }));
 
 		expect(screen.getByText(/Semaine du/).textContent).not.toBe(initialLabel);
+	});
+});
+
+describe('Résumé — compatibilité habitude à cible chiffrée (US-019, intégration bout-en-bout)', () => {
+	const targetHabit: Habit = {
+		id: 'h2',
+		name: 'Boire beaucoup d’eau',
+		emoji: '💧',
+		frequency: { kind: 'interval', days: 1, anchor: today },
+		createdAt: today,
+		target: { value: 1.5, unit: 'L' }
+	};
+
+	beforeEach(async () => {
+		await idbSet('habits', [targetHabit]);
+	});
+
+	it('scénario 1 — une quantité atteinte via le planning (US-018) est comptée « fait » dans le résumé semaine', async () => {
+		// Étape 1 : sur le planning du jour (US-018), ajoute une quantité qui atteint la cible.
+		const { unmount } = render(PlanningPage);
+		await screen.findByText(targetHabit.name);
+		await fireEvent.click(
+			screen.getByRole('button', { name: `Ajouter une quantité pour « ${targetHabit.name} »` })
+		);
+		await fireEvent.input(screen.getByLabelText('Quantité à ajouter'), {
+			target: { value: '1.5' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+		await screen.findByText('1,5 / 1,5 L');
+		unmount();
+
+		// Étape 2 : le résumé (US-005/US-019) doit refléter ce jour comme « fait », en binaire.
+		render(Page);
+		const cell = await screen.findByLabelText(new RegExp(`${targetHabit.name} — .* — done`));
+		expect(within(cell.closest('table') as HTMLElement).queryByText(/%/)).toBeNull();
 	});
 });

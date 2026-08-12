@@ -6,16 +6,26 @@
 	 */
 	import { onMount } from 'svelte';
 	import { habitsStore } from '$lib/stores/habits.store.svelte';
-	import { describeFrequency } from '$lib/domain/habits';
+	import { completionsStore } from '$lib/stores/completions.store.svelte';
+	import { visibleHabits } from '$lib/domain/habits';
 	import type { Habit } from '$lib/domain/types';
 	import HabitForm from './HabitForm.svelte';
+	import HabitCard from './HabitCard.svelte';
 
 	let formOpen = $state(false);
 	let editingHabit = $state<Habit | undefined>(undefined);
 
+	/** Habitude dont le bouton de suppression est actuellement révélé (US-013) — une seule à
+	 * la fois : glisser une autre carte referme celle-ci (scénario 5). */
+	let revealedHabitId = $state<string | null>(null);
+
 	onMount(() => {
 		void habitsStore.load();
+		void completionsStore.load();
 	});
+
+	/** Habitudes affichées dans la liste de gestion : jamais les supprimées (US-013 scénario 3). */
+	const displayedHabits = $derived(visibleHabits(habitsStore.habits));
 
 	function openCreate() {
 		editingHabit = undefined;
@@ -29,6 +39,10 @@
 
 	async function handleSave(habit: Habit) {
 		await habitsStore.upsert(habit);
+		// US-018 scénario 10 : une cible éditée doit réévaluer le statut fait/pas fait des jours
+		// déjà suivis, sans toucher au cumul brut enregistré (no-op si l'habitude n'a pas/plus
+		// de cible chiffrée, cf. US-017 scénario 6).
+		await completionsStore.recomputeTargetCompletions(habit);
 		formOpen = false;
 		editingHabit = undefined;
 	}
@@ -36,6 +50,20 @@
 	function handleCancel() {
 		formOpen = false;
 		editingHabit = undefined;
+	}
+
+	async function handleDelete(habit: Habit) {
+		await habitsStore.remove(habit.id);
+	}
+
+	/** Mise en pause (US-015 scénario 1) : réutilise `setStatus`, mécanisme partagé avec US-013. */
+	async function handlePause(habit: Habit) {
+		await habitsStore.setStatus(habit.id, 'paused');
+	}
+
+	/** Réactivation d'une habitude en pause (US-015 scénario 4). */
+	async function handleResume(habit: Habit) {
+		await habitsStore.setStatus(habit.id, 'active');
 	}
 </script>
 
@@ -49,20 +77,21 @@
 	<button class="add" onclick={openCreate}>+ Nouvelle habitude</button>
 {/if}
 
-{#if habitsStore.loaded && habitsStore.habits.length === 0 && !formOpen}
+{#if habitsStore.loaded && displayedHabits.length === 0 && !formOpen}
 	<p class="muted">Aucune habitude pour l'instant. Créez-en une pour commencer à la suivre.</p>
 {:else}
 	<ul class="habit-list">
-		{#each habitsStore.habits as habit (habit.id)}
-			<li>
-				<button class="habit-row" onclick={() => openEdit(habit)}>
-					<span class="emoji" aria-hidden="true">{habit.emoji}</span>
-					<span class="info">
-						<span class="name">{habit.name}</span>
-						<span class="frequency">{describeFrequency(habit.frequency)}</span>
-					</span>
-				</button>
-			</li>
+		{#each displayedHabits as habit (habit.id)}
+			<HabitCard
+				{habit}
+				revealed={revealedHabitId === habit.id}
+				onReveal={() => (revealedHabitId = habit.id)}
+				onCloseReveal={() => (revealedHabitId = null)}
+				onEdit={openEdit}
+				onDelete={handleDelete}
+				onPause={handlePause}
+				onResume={handleResume}
+			/>
 		{/each}
 	</ul>
 {/if}
@@ -88,37 +117,5 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-	}
-	.habit-row {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		width: 100%;
-		min-height: 44px;
-		padding: var(--card-padding);
-		background: var(--surface);
-		border: 1px solid var(--surface-border);
-		border-left: 4px solid var(--habit-border);
-		border-radius: var(--card-radius);
-		box-shadow: var(--surface-shadow);
-		color: var(--text);
-		text-align: left;
-	}
-	.emoji {
-		font-size: 1.5rem;
-	}
-	.info {
-		display: flex;
-		flex-direction: column;
-		flex: 1;
-		min-width: 0;
-	}
-	.name {
-		font-weight: 600;
-		overflow-wrap: anywhere;
-	}
-	.frequency {
-		font-size: 0.8rem;
-		color: var(--muted);
 	}
 </style>

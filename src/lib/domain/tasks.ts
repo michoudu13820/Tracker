@@ -1,4 +1,4 @@
-import type { IsoDate, Task, TaskCompletion } from './types';
+import type { IsoDate, Task, TaskCompletion, TaskRecordStatus } from './types';
 import { daysBetween } from './dates';
 
 /**
@@ -14,6 +14,25 @@ export type TaskStatus = 'done' | 'due' | 'overdue';
 /** Les tâches dont la date correspond exactement au jour donné (US-004). */
 export function tasksOn(tasks: Task[], date: IsoDate): Task[] {
 	return tasks.filter((t) => t.date === date);
+}
+
+/**
+ * Statut de gestion résolu d'une tâche (US-014, soft-delete) : une tâche sans champ `status`
+ * (persistée avant l'introduction de ce champ) est considérée `'active'`. À ne pas confondre
+ * avec `TaskStatus`/`taskStatus` ci-dessus (statut du jour : fait/à faire/en retard).
+ */
+export function taskRecordStatus(task: Task): TaskRecordStatus {
+	return task.status ?? 'active';
+}
+
+/** Une tâche supprimée (US-014, soft-delete) : absente de toute liste/planning, irréversible. */
+export function isTaskDeleted(task: Task): boolean {
+	return taskRecordStatus(task) === 'deleted';
+}
+
+/** Tâches à afficher dans les listes de gestion (`/taches`) et le planning : jamais les supprimées. */
+export function visibleTasks(tasks: Task[]): Task[] {
+	return tasks.filter((t) => !isTaskDeleted(t));
 }
 
 /**

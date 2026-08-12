@@ -4,7 +4,7 @@ id: US-007
 titre: Rappels par notification pour les habitudes du jour
 date: 2026-08-09
 auteur: product-owner
-statut: prête
+statut: livrée
 priorite: Must
 estimation: XL
 source: chat
@@ -181,3 +181,95 @@ XL — cette US couvre un périmètre fonctionnel large (déclenchement selon fr
   onglet Safari). Contrainte actée dans l'ADR-001, à anticiper dès cette US.
 - Cette US ne couvre pas l'historique des notifications envoyées ni de statistiques sur les
   rappels (ouverts, ignorés, etc.).
+
+## Implémentation
+
+L'essentiel de l'infrastructure Web Push (domaine, store, client push, service worker, fonctions
+Netlify) avait déjà été posé lors du scaffold PWA (session du 2026-08-11, cf. JOURNAL.md) et
+validé de bout en bout sur iPhone réel via un bouton de test temporaire. Cette US a complété ce
+squelette pour couvrir tous les scénarios fonctionnels et a branché la vraie UX de réglages
+(remplaçant le bouton de test, déjà retiré avant cette session lors de l'implémentation d'US-004).
+
+Scénarios couverts et testés (Vitest, domaine + store + composant) : 1, 2, 3, 3bis, 4, 5, 6, 7,
+8 (best-effort). Les scénarios 9 et 10 (fiabilité app fermée/verrouillée, passage à l'échelle)
+reposent sur l'infra serveur déjà validée manuellement sur iPhone (2026-08-11) mais **n'ont pas
+été re-vérifiés en conditions réelles pendant cette session** — non automatisables (cf.
+CONVENTIONS.md §5) : à revalider sur iPhone réel avec la PWA installée (voir « Comment tester
+manuellement » ci-dessous).
+
+### Fichiers créés
+- `src/routes/reglages/ReminderSettingsForm.svelte` — formulaire présentational (case à cocher
+  « Recevoir un rappel quotidien » + heure) avec trois affichages selon la disponibilité du canal
+  push (`unsupported` / `needs-install` / `available`, scénario 3bis) et un message explicite en
+  cas de permission refusée (scénario 5).
+- `src/routes/reglages/ReminderSettingsForm.test.ts` — 8 tests (scénarios 3bis, 4, 5, 6, 7 +
+  états non supporté/erreur).
+- `src/lib/stores/reminders.store.svelte.test.ts` — 12 tests du store (`availability`, `enable`,
+  `disable`, `sync`, `restore` — scénarios 3bis, 4, 5, 6, 7, 8, 9).
+
+### Fichiers modifiés
+- `src/lib/domain/reminders.ts` / `reminders.test.ts` — `computeReminderWindow` : (1) ne compte
+  plus une habitude en pause/supprimée (US-013/US-015) comme occurrence (utilise `habitsDueOn`
+  au lieu de `isDueOn`) ; (2) nouveau paramètre `completions` pour le best-effort du scénario 8
+  (un jour où toutes les habitudes dues sont déjà cochées n'est pas programmé). 6 nouveaux tests.
+- `src/lib/push/client.ts` — ajoute `notificationPermission()` (lecture d'état sans jamais
+  demander la permission) et `getExistingSubscription()` (retrouve une souscription déjà accordée
+  sans re-déclencher de prompt), plus l'interface `PushClient`/`defaultPushClient` pour permettre
+  l'injection du client push dans le store (mêmes principes que les repositories `lib/data`).
+- `src/lib/stores/reminders.store.svelte.ts` — client push injecté au constructeur (testable
+  sans navigateur réel) ; nouvelles méthodes `permission()` et `restore()` (retrouve la
+  souscription existante au démarrage de l'app, scénario 9) ; `enable`/`sync` acceptent désormais
+  les complétions pour le best-effort du scénario 8.
+- `src/routes/reglages/+page.svelte` — section « Rappels par notification » : câble
+  `ReminderSettingsForm` à `settingsStore` (préférences persistées) et `remindersStore`
+  (orchestration push), gère l'activation (scénario 4), le refus (scénario 5), la désactivation
+  (scénario 6) et le changement d'heure avec re-synchronisation (scénario 7).
+- `src/routes/+layout.svelte` — au montage de l'app (donc à chaque ouverture), charge les
+  réglages/habitudes/complétions, retrouve la souscription push existante (`remindersStore.restore`)
+  et re-pousse la fenêtre de rappels si les rappels sont activés — c'est ce qui permet au
+  best-effort du scénario 8 de fonctionner (la fenêtre est resynchronisée dès que l'app est
+  rouverte, pas seulement depuis l'écran réglages) et contribue à la fiabilité des scénarios 9/10.
+
+### Comment tester manuellement
+1. `npm run dev` (ou build + déploiement Netlify avec les clés VAPID configurées), installer la
+   PWA sur l'écran d'accueil d'un iPhone (Safari → Partager → « Ajouter à l'écran d'accueil »).
+2. Dans un onglet Safari **non installé** : aller sur `/reglages` → la section rappels affiche le
+   message « installée sur l'écran d'accueil… Partager → Ajouter à l'écran d'accueil », sans case
+   à cocher (scénario 3bis).
+3. Depuis l'app **installée**, ouvrir `/reglages` → cocher « Recevoir un rappel quotidien » → le
+   système iOS demande l'autorisation de notifications (scénario 4). Accepter : la case reste
+   cochée, l'heure par défaut affichée est 08:00 (scénario 7).
+4. Refuser l'autorisation (sur une autre souscription/appareil de test) → message d'erreur
+   explicite affiché, case non cochée, rien n'est activé silencieusement (scénario 5).
+5. Changer l'heure (ex. 20:30) → nouvelle valeur persistée ; via `netlify/functions/trigger-send.ts`
+   (secret `TRIGGER_SEND_SECRET`) ou en attendant le cron 15 min, vérifier que le prochain push
+   respecte ~cette heure (scénario 7).
+6. Créer une habitude « tous les 2 jours » ou « lundi/mercredi/vendredi » (US-001), revenir sur le
+   planning (`/`) un jour où elle est due : vérifier via `trigger-send` qu'un push générique
+   arrive (« Tu as des habitudes prévues aujourd'hui »), sans jamais nommer l'habitude (scénarios
+   1, 2, 3).
+7. Cocher toutes les habitudes du jour comme faites, rouvrir l'app (déclenche la resynchronisation
+   dans `+layout.svelte`), puis déclencher `trigger-send` : aucun push ne doit arriver ce jour-là
+   (scénario 8, best-effort — nécessite d'avoir rouvert l'app après le cochage).
+8. Décocher « Recevoir un rappel quotidien » → plus aucun push, même en déclenchant `trigger-send`
+   (scénario 6).
+9. **À revalider manuellement sur iPhone réel avec l'app fermée / le téléphone verrouillé**
+   (scénario 9) et avec un nombre significatif d'habitudes actives sur plusieurs jours (scénario
+   10) — non automatisable, cf. note plus haut.
+
+### Hypothèses / décisions prises pendant l'implémentation
+- **Filtrage des habitudes en pause/supprimées dans le calcul de la fenêtre de rappels** : l'US
+  ne mentionnait pas explicitement ce cas (US-013/US-015 n'existaient pas encore au moment de sa
+  rédaction), mais laisser une habitude en pause déclencher un rappel contredirait son absence du
+  planning — corrigé par cohérence avec `habitsDueOn`, sans que cela ne change le contrat
+  fonctionnel des scénarios déjà spécifiés.
+- **Point de resynchronisation "à l'ouverture de l'app" placé dans `+layout.svelte`** (montage,
+  donc une fois par session) plutôt qu'après chaque mutation individuelle (cocher une habitude,
+  éditer une fréquence). Choix de simplicité conforme au texte du scénario 8, qui conditionne
+  explicitement le best-effort à une **réouverture de l'app**, pas à chaque action.
+- **Écran "PWA non installée" (3bis) sans aucun contrôle actionnable** plutôt qu'une case à cocher
+  désactivée : rend structurellement impossible tout déclenchement de demande de permission dans
+  cet état (au lieu de reposer sur la seule discipline du code du gestionnaire de clic).
+- Aucune autre ambiguïté bloquante ; les arbitrages produit du 2026-08-12 (heure par défaut 8h00,
+  compteur non nominatif autorisé mais non obligatoire, pas d'US d'onboarding) ont été suivis tels
+  quels.

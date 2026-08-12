@@ -1,4 +1,4 @@
-import type { Habit, IsoDate } from '$lib/domain/types';
+import type { Habit, HabitStatus, IsoDate } from '$lib/domain/types';
 import { habitsDueOn } from '$lib/domain/occurrences';
 import { idbRepositories, type HabitsRepository } from '$lib/data/repositories';
 
@@ -33,6 +33,22 @@ export class HabitsStore {
 		// réactifs, non clonables par `structuredClone` (utilisé en interne par idb-keyval
 		// pour écrire dans IndexedDB). On dé-proxifie avant persistance (BUG-001).
 		await this.#repo.saveAll($state.snapshot(this.habits));
+	}
+
+	/**
+	 * Change le statut de gestion d'une habitude (US-013 suppression / US-015 pause-reprise) :
+	 * mécanisme unique et réutilisé plutôt que deux systèmes parallèles (cf. dépendance
+	 * US-013 → US-015). `'deleted'` est un état terminal, jamais réattribué depuis l'UI.
+	 */
+	async setStatus(habitId: string, status: HabitStatus) {
+		const habit = this.habits.find((h) => h.id === habitId);
+		if (!habit) return;
+		await this.upsert({ ...habit, status });
+	}
+
+	/** Supprime une habitude (US-013, soft-delete) : conserve son historique de complétion. */
+	async remove(habitId: string) {
+		await this.setStatus(habitId, 'deleted');
 	}
 }
 

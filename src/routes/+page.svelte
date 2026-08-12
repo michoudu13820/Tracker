@@ -11,9 +11,11 @@
 	import { tasksStore } from '$lib/stores/tasks.store.svelte';
 	import { completionsStore } from '$lib/stores/completions.store.svelte';
 	import { toIsoDate, dateStripRange, formatPlanningTitleFr } from '$lib/domain/dates';
-	import type { IsoDate } from '$lib/domain/types';
+	import { hasNumericTarget } from '$lib/domain/habits';
+	import type { Habit, IsoDate } from '$lib/domain/types';
 	import { TaskItem } from '$lib/components';
 	import HabitCheckItem from './HabitCheckItem.svelte';
+	import HabitProgressItem from './HabitProgressItem.svelte';
 	import DateStrip from './DateStrip.svelte';
 
 	/** "Aujourd'hui" réel — sert de référence pour le statut "en retard" des tâches
@@ -49,6 +51,16 @@
 		await completionsStore.setHabitDone(habitId, selectedDate, done);
 	}
 
+	/** Ajoute une quantité au cumul du jour affiché (US-018 scénarios 2/3/5). */
+	async function handleProgressAdd(habit: Habit, amount: number) {
+		await completionsStore.addHabitProgress(habit, selectedDate, amount);
+	}
+
+	/** Corrige directement la valeur cumulée du jour affiché (US-018 scénario 9). */
+	async function handleProgressCorrect(habit: Habit, value: number) {
+		await completionsStore.setHabitProgress(habit, selectedDate, value);
+	}
+
 	async function handleTaskToggle(taskId: string, done: boolean) {
 		await completionsStore.setTaskDone(taskId, done, done ? realToday : undefined);
 	}
@@ -73,11 +85,21 @@
 	{:else}
 		<ul class="item-list">
 			{#each dueHabits as habit (habit.id)}
-				<HabitCheckItem
-					{habit}
-					done={completionsStore.isHabitDone(habit.id, selectedDate)}
-					onToggle={handleHabitToggle}
-				/>
+				{#if hasNumericTarget(habit)}
+					<HabitProgressItem
+						{habit}
+						value={completionsStore.habitProgressValue(habit.id, selectedDate)}
+						done={completionsStore.isHabitDone(habit.id, selectedDate)}
+						onAdd={(amount) => handleProgressAdd(habit, amount)}
+						onCorrect={(value) => handleProgressCorrect(habit, value)}
+					/>
+				{:else}
+					<HabitCheckItem
+						{habit}
+						done={completionsStore.isHabitDone(habit.id, selectedDate)}
+						onToggle={handleHabitToggle}
+					/>
+				{/if}
 			{/each}
 		</ul>
 	{/if}

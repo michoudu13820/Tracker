@@ -1,5 +1,6 @@
 import type { ColorThresholds, ReminderSettings } from '$lib/domain/types';
 import { DEFAULT_THRESHOLDS } from '$lib/domain/summary';
+import { DEFAULT_FONT_CHOICE, type FontChoice } from '$lib/domain/fonts';
 import { idbRepositories, type SettingsRepository } from '$lib/data/repositories';
 
 /**
@@ -12,6 +13,9 @@ export class SettingsStore {
 	#repo: SettingsRepository;
 	reminder = $state<ReminderSettings | null>(null);
 	thresholds = $state<ColorThresholds>({ ...DEFAULT_THRESHOLDS });
+	/** Police de caractères choisie (US-016) — `DEFAULT_FONT_CHOICE` (US-020 : Dancing Script) tant
+	 * que rien n'a été choisi explicitement. */
+	fontChoice = $state<FontChoice>(DEFAULT_FONT_CHOICE);
 	loaded = $state(false);
 
 	constructor(repo: SettingsRepository = idbRepositories.settings) {
@@ -19,9 +23,10 @@ export class SettingsStore {
 	}
 
 	async load() {
-		[this.reminder, this.thresholds] = await Promise.all([
+		[this.reminder, this.thresholds, this.fontChoice] = await Promise.all([
 			this.#repo.getReminderSettings(),
-			this.#repo.getColorThresholds()
+			this.#repo.getColorThresholds(),
+			this.#repo.getFontChoice()
 		]);
 		this.loaded = true;
 	}
@@ -39,6 +44,12 @@ export class SettingsStore {
 	async saveThresholds(thresholds: ColorThresholds) {
 		this.thresholds = thresholds;
 		await this.#repo.saveColorThresholds($state.snapshot(thresholds));
+	}
+
+	/** Enregistre la police choisie (US-016) et l'applique immédiatement (voir `$lib/fonts/client`). */
+	async saveFontChoice(choice: FontChoice) {
+		this.fontChoice = choice;
+		await this.#repo.saveFontChoice(choice);
 	}
 }
 

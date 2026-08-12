@@ -2,6 +2,7 @@ import { get, set } from 'idb-keyval';
 import type {
 	Habit,
 	HabitCompletion,
+	HabitProgress,
 	IsoDate,
 	ReminderSettings,
 	Task,
@@ -9,6 +10,7 @@ import type {
 	ColorThresholds
 } from '$lib/domain/types';
 import { DEFAULT_THRESHOLDS } from '$lib/domain/summary';
+import { DEFAULT_FONT_CHOICE, type FontChoice } from '$lib/domain/fonts';
 
 /**
  * Couche d'accès aux données — 100% locale (IndexedDB via idb-keyval).
@@ -34,6 +36,9 @@ export interface CompletionsRepository {
 	saveHabitCompletions(c: HabitCompletion[]): Promise<void>;
 	getTaskCompletions(): Promise<TaskCompletion[]>;
 	saveTaskCompletions(c: TaskCompletion[]): Promise<void>;
+	/** Progression cumulée quotidienne des habitudes à cible chiffrée (US-018). */
+	getHabitProgress(): Promise<HabitProgress[]>;
+	saveHabitProgress(p: HabitProgress[]): Promise<void>;
 }
 
 export interface SettingsRepository {
@@ -41,6 +46,10 @@ export interface SettingsRepository {
 	saveReminderSettings(s: ReminderSettings): Promise<void>;
 	getColorThresholds(): Promise<ColorThresholds>;
 	saveColorThresholds(t: ColorThresholds): Promise<void>;
+	/** Police de caractères choisie (US-016). Même agrégat de préférences persistées que les
+	 * seuils de couleur et les rappels, comme demandé par la dépendance de l'US. */
+	getFontChoice(): Promise<FontChoice>;
+	saveFontChoice(choice: FontChoice): Promise<void>;
 }
 
 const KEYS = {
@@ -48,8 +57,10 @@ const KEYS = {
 	tasks: 'tasks',
 	habitCompletions: 'habit-completions',
 	taskCompletions: 'task-completions',
+	habitProgress: 'habit-progress',
 	reminder: 'reminder-settings',
-	thresholds: 'color-thresholds'
+	thresholds: 'color-thresholds',
+	font: 'font-choice'
 } as const;
 
 function defaultReminder(): ReminderSettings {
@@ -92,6 +103,12 @@ export const idbRepositories = {
 		},
 		async saveTaskCompletions(c: TaskCompletion[]) {
 			await set(KEYS.taskCompletions, c);
+		},
+		async getHabitProgress() {
+			return (await get<HabitProgress[]>(KEYS.habitProgress)) ?? [];
+		},
+		async saveHabitProgress(p: HabitProgress[]) {
+			await set(KEYS.habitProgress, p);
 		}
 	} satisfies CompletionsRepository,
 
@@ -107,6 +124,12 @@ export const idbRepositories = {
 		},
 		async saveColorThresholds(t: ColorThresholds) {
 			await set(KEYS.thresholds, t);
+		},
+		async getFontChoice() {
+			return (await get<FontChoice>(KEYS.font)) ?? DEFAULT_FONT_CHOICE;
+		},
+		async saveFontChoice(choice: FontChoice) {
+			await set(KEYS.font, choice);
 		}
 	} satisfies SettingsRepository
 };

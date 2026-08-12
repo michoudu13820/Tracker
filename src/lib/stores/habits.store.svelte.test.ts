@@ -52,3 +52,39 @@ describe('HabitsStore.upsert (régression BUG-001)', () => {
 		expect(repo.saved[0]).toEqual([habit]);
 	});
 });
+
+describe('HabitsStore.remove / setStatus (US-013 suppression, mécanisme réutilisé par US-015)', () => {
+	it('marque une habitude comme supprimée sans la retirer du repository (soft-delete)', async () => {
+		const repo = fakeRepo();
+		const store = new HabitsStore(repo);
+		await store.upsert(habit);
+
+		await store.remove(habit.id);
+
+		expect(store.habits).toHaveLength(1);
+		expect(store.habits[0].status).toBe('deleted');
+		expect(repo.saved.at(-1)).toEqual([{ ...habit, status: 'deleted' }]);
+	});
+
+	it('ne fait rien si l\'habitude ciblée est introuvable', async () => {
+		const repo = fakeRepo();
+		const store = new HabitsStore(repo);
+		await store.upsert(habit);
+
+		await store.remove('inconnu');
+
+		expect(store.habits[0].status).toBeUndefined();
+	});
+
+	it('setStatus bascule vers un statut arbitraire (réutilisé par la pause US-015)', async () => {
+		const repo = fakeRepo();
+		const store = new HabitsStore(repo);
+		await store.upsert(habit);
+
+		await store.setStatus(habit.id, 'paused');
+		expect(store.habits[0].status).toBe('paused');
+
+		await store.setStatus(habit.id, 'active');
+		expect(store.habits[0].status).toBe('active');
+	});
+});

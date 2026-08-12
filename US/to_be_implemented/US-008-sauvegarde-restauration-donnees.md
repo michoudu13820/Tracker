@@ -67,6 +67,15 @@ M — sérialisation de l'ensemble du modèle de données (habitudes, tâches, c
 US-001 (habitudes à exporter/importer), US-002 (tâches à exporter/importer), US-004 (historique de complétion produit par le planning quotidien — sans lui, l'export serait incomplet et peu utile en pratique).
 
 ### Notes / hors périmètre
+- **État partiel existant (2026-08-12)** : la couche données (`src/lib/data/backup.ts` —
+  `collectBackup`/`restoreBackup`, format `BackupData` versionné, incluant déjà la progression
+  des habitudes à cible chiffrée introduite par US-018) a été construite en avance de phase, en
+  marge de l'implémentation de US-018, pour ne pas perdre silencieusement cette donnée à
+  l'export/import. **Il manque encore entièrement l'UI** (boutons Exporter/Importer dans
+  `src/routes/reglages/+page.svelte`, actuellement un simple placeholder commenté), le
+  téléchargement/la sélection de fichier, et le parcours de confirmation avant écrasement
+  (scénarios 3 à 6). Ne pas repartir de zéro sur la couche données : réutiliser
+  `collectBackup`/`restoreBackup` tels quels.
 - Pas de sauvegarde automatique périodique ni de synchronisation cloud dans cette US : l'export/import est une action manuelle explicite déclenchée par l'utilisateur, cohérent avec le principe « données 100 % locales » de l'ADR-001 (« presque zéro backend »).
 - Pas de fusion intelligente (merge) entre les données actuelles et le fichier importé : l'import **remplace** intégralement les données actuelles par celles du fichier (stratégie « replace », pas « merge »). À raffiner si un besoin de fusion s'avère nécessaire par la suite.
 - Ne couvre pas la sauvegarde/restauration de la souscription Web Push (état côté serveur, cf. ADR-001/US-007) : ce n'est pas une donnée métier, elle reste liée à l'appareil et au navigateur et devra être réactivée séparément après un import sur un nouvel appareil.

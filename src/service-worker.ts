@@ -19,6 +19,12 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
 const CACHE = `cache-${version}`;
 const ASSETS = [...build, ...files];
 
+// Cache "runtime" séparé pour les polices Google Fonts (US-016) : nom STABLE (pas suffixé par
+// `version`), pour survivre aux mises à jour de l'app shell — une police déjà téléchargée une
+// fois en ligne reste disponible hors-ligne, sans redemander le réseau à chaque déploiement.
+const FONT_CACHE = 'tracker-google-fonts-v1';
+const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
+
 sw.addEventListener('install', (event) => {
 	event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => sw.skipWaiting()));
 });
@@ -27,7 +33,9 @@ sw.addEventListener('activate', (event) => {
 	event.waitUntil(
 		caches
 			.keys()
-			.then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+			.then((keys) =>
+				Promise.all(keys.filter((k) => k !== CACHE && k !== FONT_CACHE).map((k) => caches.delete(k)))
+			)
 			.then(() => sw.clients.claim())
 	);
 });
@@ -35,10 +43,33 @@ sw.addEventListener('activate', (event) => {
 sw.addEventListener('fetch', (event) => {
 	const { request } = event;
 	if (request.method !== 'GET') return;
+
+	if (FONT_HOSTS.includes(new URL(request.url).hostname)) {
+		event.respondWith(handleFontRequest(request));
+		return;
+	}
+
 	event.respondWith(
 		caches.match(request).then((cached) => cached ?? fetch(request).catch(() => caches.match('/')) as Promise<Response>)
 	);
 });
+
+/**
+ * Stratégie cache-first + mise en cache "runtime" pour les polices Google Fonts (US-016) :
+ * sert depuis le cache si déjà téléchargée, sinon va au réseau et met en cache pour la
+ * prochaine fois. Si ni le cache ni le réseau ne répondent (hors-ligne, jamais chargée), laisse
+ * l'échec se propager normalement : chaque `cssFontFamily` du catalogue (`$lib/domain/fonts`)
+ * empile toujours la pile système en repli, donc l'app reste lisible sans erreur visible.
+ */
+async function handleFontRequest(request: Request): Promise<Response> {
+	const cache = await caches.open(FONT_CACHE);
+	const cached = await cache.match(request);
+	if (cached) return cached;
+
+	const response = await fetch(request);
+	if (response.ok) await cache.put(request, response.clone());
+	return response;
+}
 
 sw.addEventListener('push', (event) => {
 	const data = safeJson(event);

@@ -41,6 +41,13 @@
 	--card-radius: 0.75rem;
 	--card-padding: 0.6rem 0.75rem;
 
+	/* Police de caractères (US-016) — source de vérité unique, dans l'esprit de la
+	   centralisation des couleurs (US-009). Valeur par défaut = pile système actuelle,
+	   inchangée tant que l'utilisateur n'a pas choisi une police dans Réglages ; appliquée/
+	   remplacée dynamiquement par `$lib/fonts/client` (`applyFontChoice`) selon le réglage
+	   persisté (`settingsStore.fontChoice`). */
+	--font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
 	color-scheme: light;
 }
 
@@ -55,7 +62,7 @@ body {
 	min-height: 100dvh;
 	background: var(--bg);
 	color: var(--text);
-	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	font-family: var(--font-family);
 	/* Respecte les encoches iPhone en mode standalone */
 	padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
 		env(safe-area-inset-left);

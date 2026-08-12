@@ -2,12 +2,15 @@
 	/**
 	 * Élément de tâche ponctuelle réutilisable — utilisé par `/taches` (US-002/US-003) et
 	 * `/` (planning quotidien, US-004) : cochage, badge de statut (fait / à faire / en retard),
-	 * et action de reprogrammation quand la tâche est en retard (US-003). Partagé entre ≥ 2
-	 * routes → placé dans `lib/components` (voir CONVENTIONS.md §7).
+	 * action de reprogrammation quand la tâche est en retard (US-003), et suppression par
+	 * glisser + confirmation (US-014) — réservée à `/taches` : disponible uniquement si
+	 * `onDelete` est fourni (scénario 6 : absente sur le planning `/`, comme `onEdit`).
+	 * Partagé entre ≥ 2 routes → placé dans `lib/components` (voir CONVENTIONS.md §7).
 	 */
 	import type { IsoDate, Task } from '$lib/domain/types';
 	import { taskStatus, validateReschedule } from '$lib/domain/tasks';
 	import { formatIsoDateFr } from '$lib/domain/dates';
+	import { SwipeToDelete, ConfirmDialog } from '$lib/components';
 
 	interface Props {
 		task: Task;
@@ -19,15 +22,35 @@
 		onReschedule: (taskId: string, newDate: IsoDate) => void;
 		/** Action d'édition optionnelle (utilisée par `/taches`, absente sur le planning `/`). */
 		onEdit?: (task: Task) => void;
+		/** Le bouton de suppression de cette carte est-il révélé (glissement) ? Piloté par le
+		 * parent pour n'avoir qu'une seule carte révélée à la fois dans la liste (US-014). */
+		revealed?: boolean;
+		onReveal?: () => void;
+		onCloseReveal?: () => void;
+		/** Action de suppression optionnelle (US-014 scénario 6 : fournie uniquement par
+		 * `/taches`, absente sur le planning `/` — active la fonctionnalité de glisser). */
+		onDelete?: (taskId: string) => void;
 	}
 
-	let { task, done, today, onToggle, onReschedule, onEdit }: Props = $props();
+	let {
+		task,
+		done,
+		today,
+		onToggle,
+		onReschedule,
+		onEdit,
+		revealed = false,
+		onReveal,
+		onCloseReveal,
+		onDelete
+	}: Props = $props();
 
 	const status = $derived(taskStatus(task, done, today));
 
 	let reprogramOpen = $state(false);
 	let newDate = $state<IsoDate | null>(null);
 	let error = $state<string | null>(null);
+	let confirmOpen = $state(false);
 
 	function openReprogram() {
 		reprogramOpen = true;
@@ -51,6 +74,20 @@
 		reprogramOpen = false;
 	}
 
+	function openConfirmDelete() {
+		confirmOpen = true;
+	}
+
+	function cancelConfirmDelete() {
+		confirmOpen = false;
+	}
+
+	function confirmDelete() {
+		confirmOpen = false;
+		onCloseReveal?.();
+		onDelete?.(task.id);
+	}
+
 	const statusLabel: Record<typeof status, string> = {
 		done: 'Faite',
 		due: 'À faire',
@@ -58,7 +95,7 @@
 	};
 </script>
 
-<li class="task-item" data-status={status}>
+{#snippet row()}
 	<label class="row">
 		<input
 			type="checkbox"
@@ -73,6 +110,22 @@
 		</span>
 		<span class="badge" data-status={status}>{statusLabel[status]}</span>
 	</label>
+{/snippet}
+
+<li class="task-item" data-status={status}>
+	{#if onDelete}
+		<SwipeToDelete
+			{revealed}
+			onReveal={() => onReveal?.()}
+			onCloseReveal={() => onCloseReveal?.()}
+			onDeleteClick={openConfirmDelete}
+			deleteLabel={`Supprimer « ${task.name} »`}
+		>
+			{@render row()}
+		</SwipeToDelete>
+	{:else}
+		{@render row()}
+	{/if}
 
 	<div class="secondary-actions">
 		{#if status === 'overdue' && !reprogramOpen}
@@ -97,6 +150,14 @@
 		</form>
 	{/if}
 </li>
+
+{#if confirmOpen}
+	<ConfirmDialog
+		message={`Supprimer « ${task.name} » (${formatIsoDateFr(task.date)}) ? Cette action est définitive.`}
+		onConfirm={confirmDelete}
+		onCancel={cancelConfirmDelete}
+	/>
+{/if}
 
 <style>
 	.task-item {

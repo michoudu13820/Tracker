@@ -1,5 +1,5 @@
 import type { IsoDate, Task } from '$lib/domain/types';
-import { tasksOn } from '$lib/domain/tasks';
+import { tasksOn, visibleTasks } from '$lib/domain/tasks';
 import { idbRepositories, type TasksRepository } from '$lib/data/repositories';
 
 /**
@@ -21,9 +21,9 @@ export class TasksStore {
 		this.loaded = true;
 	}
 
-	/** Tâches datées d'un jour donné (US-004). */
+	/** Tâches actives datées d'un jour donné (US-004). Exclut les tâches supprimées (US-014). */
 	onDate(date: IsoDate): Task[] {
-		return tasksOn(this.tasks, date);
+		return tasksOn(visibleTasks(this.tasks), date);
 	}
 
 	/** Crée ou met à jour une tâche (US-002). La reprogrammation (US-003) est un upsert de date. */
@@ -35,6 +35,17 @@ export class TasksStore {
 		// réactifs, non clonables par `structuredClone` (utilisé en interne par idb-keyval
 		// pour écrire dans IndexedDB). On dé-proxifie avant persistance (BUG-001).
 		await this.#repo.saveAll($state.snapshot(this.tasks));
+	}
+
+	/**
+	 * Supprime une tâche (US-014, soft-delete) : marque son statut `deleted` plutôt que de la
+	 * retirer du repository, pour conserver sa complétion éventuellement enregistrée (lue par
+	 * le résumé, US-005). Action irréversible côté UI (aucune restauration proposée).
+	 */
+	async remove(taskId: string) {
+		const task = this.tasks.find((t) => t.id === taskId);
+		if (!task) return;
+		await this.upsert({ ...task, status: 'deleted' });
 	}
 }
 

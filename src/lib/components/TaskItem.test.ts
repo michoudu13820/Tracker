@@ -11,6 +11,22 @@ const task: Task = {
 	createdAt: '2026-08-01'
 };
 
+describe("TaskItem — pas de mise en pause pour les tâches (US-015 scénario 5)", () => {
+	it("ne propose jamais d'action de mise en pause, même avec toutes les actions actives", () => {
+		render(TaskItem, {
+			task,
+			done: false,
+			today: '2026-08-12',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn(),
+			onEdit: vi.fn(),
+			onDelete: vi.fn()
+		});
+		expect(screen.queryByRole('button', { name: /pause/i })).toBeNull();
+		expect(screen.queryByRole('button', { name: /réactiver/i })).toBeNull();
+	});
+});
+
 describe('TaskItem — statut (US-003)', () => {
 	it('signale une tâche en retard (scénario 1)', () => {
 		render(TaskItem, {
@@ -163,5 +179,130 @@ describe('TaskItem — édition optionnelle', () => {
 		});
 		await fireEvent.click(screen.getByRole('button', { name: 'Modifier' }));
 		expect(onEdit).toHaveBeenCalledWith(task);
+	});
+});
+
+function pointer(el: Element, type: 'pointerdown' | 'pointerup', clientX: number) {
+	return fireEvent(el, new MouseEvent(type, { clientX, bubbles: true, cancelable: true }));
+}
+
+describe('TaskItem — suppression par glisser + confirmation (US-014)', () => {
+	it("n'active pas le geste de suppression si onDelete n'est pas fourni (scénario 6 — planning)", async () => {
+		const onReveal = vi.fn();
+		render(TaskItem, {
+			task,
+			done: false,
+			today: '2026-08-12',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn(),
+			revealed: false,
+			onReveal
+		});
+
+		const checkbox = screen.getByRole('checkbox');
+		await pointer(checkbox, 'pointerdown', 200);
+		await pointer(checkbox, 'pointerup', 100);
+
+		expect(onReveal).not.toHaveBeenCalled();
+		expect(screen.queryByRole('button', { name: /Supprimer/ })).toBeNull();
+	});
+
+	it('révèle le bouton poubelle au glissement quand onDelete est fourni (scénario 1)', async () => {
+		const onReveal = vi.fn();
+		render(TaskItem, {
+			task,
+			done: false,
+			today: '2026-08-12',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn(),
+			revealed: false,
+			onReveal,
+			onDelete: vi.fn()
+		});
+
+		const checkbox = screen.getByRole('checkbox');
+		await pointer(checkbox, 'pointerdown', 200);
+		await pointer(checkbox, 'pointerup', 100);
+
+		expect(onReveal).toHaveBeenCalledTimes(1);
+	});
+
+	it('demande confirmation au clic sur le bouton poubelle, avec le nom et la date de la tâche (scénario 2)', async () => {
+		render(TaskItem, {
+			task,
+			done: false,
+			today: '2026-08-12',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn(),
+			revealed: true,
+			onDelete: vi.fn()
+		});
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Supprimer « Appeler le plombier »' }));
+
+		const dialog = screen.getByRole('alertdialog');
+		expect(dialog).toHaveTextContent('Appeler le plombier');
+		expect(dialog).toHaveTextContent('12/08/2026');
+		expect(dialog).toHaveTextContent('définitive');
+	});
+
+	it('supprime effectivement après confirmation (scénario 3)', async () => {
+		const onDelete = vi.fn();
+		const onCloseReveal = vi.fn();
+		render(TaskItem, {
+			task,
+			done: false,
+			today: '2026-08-12',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn(),
+			revealed: true,
+			onCloseReveal,
+			onDelete
+		});
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Supprimer « Appeler le plombier »' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
+
+		expect(onDelete).toHaveBeenCalledWith('t1');
+		expect(onCloseReveal).toHaveBeenCalled();
+	});
+
+	it('annule sans supprimer quand on choisit Annuler (scénario 4)', async () => {
+		const onDelete = vi.fn();
+		render(TaskItem, {
+			task,
+			done: false,
+			today: '2026-08-12',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn(),
+			revealed: true,
+			onDelete
+		});
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Supprimer « Appeler le plombier »' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+
+		expect(onDelete).not.toHaveBeenCalled();
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+	});
+
+	it("referme le bouton poubelle sans suppression si on interagit ailleurs sur la carte (scénario 5)", async () => {
+		const onCloseReveal = vi.fn();
+		const onToggle = vi.fn();
+		render(TaskItem, {
+			task,
+			done: false,
+			today: '2026-08-12',
+			onToggle,
+			onReschedule: vi.fn(),
+			revealed: true,
+			onCloseReveal,
+			onDelete: vi.fn()
+		});
+
+		await fireEvent.click(screen.getByRole('checkbox'));
+
+		expect(onCloseReveal).toHaveBeenCalledTimes(1);
+		expect(onToggle).not.toHaveBeenCalled();
 	});
 });

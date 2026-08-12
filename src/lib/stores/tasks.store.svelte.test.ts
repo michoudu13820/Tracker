@@ -41,3 +41,36 @@ describe('TasksStore.upsert (régression BUG-001)', () => {
 		expect(repo.saved[0]).toEqual([task]);
 	});
 });
+
+describe('TasksStore.remove (US-014 — soft-delete)', () => {
+	it('marque une tâche comme supprimée sans la retirer du repository', async () => {
+		const repo = fakeRepo();
+		const store = new TasksStore(repo);
+		await store.upsert(task);
+
+		await store.remove(task.id);
+
+		expect(store.tasks).toHaveLength(1);
+		expect(store.tasks[0].status).toBe('deleted');
+		expect(repo.saved.at(-1)).toEqual([{ ...task, status: 'deleted' }]);
+	});
+
+	it("n'inclut plus une tâche supprimée dans onDate (scénario 3)", async () => {
+		const repo = fakeRepo();
+		const store = new TasksStore(repo);
+		await store.upsert(task);
+		await store.remove(task.id);
+
+		expect(store.onDate(task.date)).toEqual([]);
+	});
+
+	it("ne fait rien si la tâche ciblée est introuvable", async () => {
+		const repo = fakeRepo();
+		const store = new TasksStore(repo);
+		await store.upsert(task);
+
+		await store.remove('inconnu');
+
+		expect(store.tasks[0].status).toBeUndefined();
+	});
+});

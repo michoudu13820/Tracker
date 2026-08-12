@@ -7,10 +7,14 @@
 	 */
 	import type { Habit, Weekday } from '$lib/domain/types';
 	import {
+		TARGET_UNITS,
 		WEEKDAY_ORDER,
 		draftToFrequency,
+		draftToTarget,
 		emptyHabitDraft,
 		frequencyToDraft,
+		targetToDraft,
+		targetUnitLabel,
 		validateHabitDraft,
 		weekdayLabel,
 		type HabitDraft
@@ -28,7 +32,12 @@
 
 	function initialDraft(): HabitDraft {
 		if (!habit) return emptyHabitDraft();
-		return { name: habit.name, emoji: habit.emoji, ...frequencyToDraft(habit.frequency) };
+		return {
+			name: habit.name,
+			emoji: habit.emoji,
+			...frequencyToDraft(habit.frequency),
+			...targetToDraft(habit.target)
+		};
 	}
 
 	let draft = $state<HabitDraft>(initialDraft());
@@ -61,7 +70,8 @@
 			name: draft.name.trim(),
 			emoji: draft.emoji,
 			frequency: draftToFrequency(draft, anchor),
-			createdAt: habit?.createdAt ?? toIsoDate(new Date())
+			createdAt: habit?.createdAt ?? toIsoDate(new Date()),
+			target: draftToTarget(draft)
 		};
 		onSave(savedHabit);
 	}
@@ -120,6 +130,38 @@
 						{weekdayLabel(day)}
 					</label>
 				{/each}
+			</div>
+		{/if}
+	</fieldset>
+
+	<fieldset class="field">
+		<legend>Cible chiffrée (optionnel)</legend>
+		<label class="target-toggle">
+			<input type="checkbox" bind:checked={draft.hasTarget} />
+			Suivre une quantité
+		</label>
+
+		{#if draft.hasTarget}
+			<div class="target-fields">
+				<div class="field">
+					<label for="habit-target-value">Valeur cible</label>
+					<input
+						id="habit-target-value"
+						type="number"
+						step="0.01"
+						min="0"
+						bind:value={draft.targetValue}
+						placeholder="1.5"
+					/>
+				</div>
+				<div class="field">
+					<label for="habit-target-unit">Unité</label>
+					<select id="habit-target-unit" bind:value={draft.targetUnit}>
+						{#each TARGET_UNITS as unit (unit)}
+							<option value={unit}>{targetUnitLabel(unit)}</option>
+						{/each}
+					</select>
+				</div>
 			</div>
 		{/if}
 	</fieldset>
@@ -205,6 +247,29 @@
 		display: flex;
 		align-items: center;
 		gap: 0.25rem;
+		min-height: 44px;
+	}
+	.target-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-height: 44px;
+		font-size: 0.9rem;
+		color: var(--text);
+	}
+	.target-fields {
+		display: flex;
+		gap: 0.75rem;
+	}
+	.target-fields .field {
+		flex: 1;
+	}
+	select {
+		background: var(--bg);
+		border: 1px solid var(--surface-border);
+		border-radius: 0.35rem;
+		color: var(--text);
+		padding: 0.5rem;
 		min-height: 44px;
 	}
 	.errors {

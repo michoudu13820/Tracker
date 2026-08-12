@@ -92,6 +92,16 @@ complétion, aucun réglage métier ne doit transiter. Toute évolution de `$lib
 `netlify/functions/` doit préserver cette limite (ADR-001). Le contenu du push reste **générique**
 (éventuel compteur non nominatif), jamais nominatif.
 
+**Exception documentée (US-016, polices Google Fonts)** : `$lib/fonts/client` charge une feuille
+de style/police depuis `fonts.googleapis.com`/`fonts.gstatic.com`. Ce n'est **pas** un appel à un
+backend applicatif (pas de compte, pas de donnée personnelle transmise, requête anonyme vers un
+CDN de polices statique) — décision produit explicitement tranchée par l'utilisateur malgré
+l'écart avec le principe 100 % local d'ADR-001. Repli systématique sur la police système si la
+requête échoue (hors-ligne, jamais chargée) : voir `$lib/domain/fonts` (chaque `cssFontFamily`
+empile la pile système en dernier repli) et le cache runtime dédié dans `src/service-worker.ts`
+(`FONT_CACHE`, nom stable indépendant de `version`). N'étend pas la portée de cette exception à
+d'autres besoins réseau : tout nouvel appel externe doit repasser par une décision explicite.
+
 ## 7. Colocation vs partage
 
 - Un composant utilisé par **une seule** route → le colocaliser dans le dossier de la route

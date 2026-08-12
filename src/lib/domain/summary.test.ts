@@ -129,6 +129,27 @@ describe('habitMonthPercent (US-005 scénarios 3/6bis)', () => {
 		const percent = habitMonthPercent(habit, 2026, 8, completions);
 		expect(percent).toBe(40); // 2 cochés / 5 lundis
 	});
+
+	it('continue de compter l\'historique d\'une habitude en pause ou supprimée (US-015 scénario 3 / US-013 scénario 3 — non-régression)', () => {
+		const paused: Habit = {
+			id: 'h2',
+			name: 'Test en pause',
+			emoji: '✅',
+			frequency: { kind: 'weekdays', weekdays: [1] },
+			createdAt: '2026-01-01',
+			status: 'paused'
+		};
+		const deleted: Habit = { ...paused, id: 'h3', name: 'Test supprimée', status: 'deleted' };
+		const completions: HabitCompletion[] = [
+			{ habitId: 'h2', date: '2026-08-03', done: true },
+			{ habitId: 'h3', date: '2026-08-03', done: true }
+		];
+		// Le statut de gestion (US-013/US-015) n'affecte pas le calcul du résumé, qui reste
+		// une fonction pure du couple (fréquence, complétions) — la route `/resume` continue de
+		// fournir la liste complète des habitudes, indépendamment de leur statut.
+		expect(habitMonthPercent(paused, 2026, 8, completions)).toBe(20); // 1 coché / 5 lundis
+		expect(habitMonthPercent(deleted, 2026, 8, completions)).toBe(20);
+	});
 });
 
 describe('taskDayPercent (US-005 scénarios 4/5)', () => {
@@ -165,6 +186,50 @@ describe('taskMonthPercent (US-005 scénarios 4bis/5)', () => {
 	it('agrège le pourcentage sur le mois', () => {
 		const completions: TaskCompletion[] = [{ taskId: 't1', done: true }];
 		expect(taskMonthPercent(tasks, completions, 2026, 8)).toBe(50);
+	});
+});
+
+describe('habitCellStatus / habitMonthPercent — habitude à cible chiffrée (US-019)', () => {
+	// US-019 : le statut fait/pas fait d'une habitude à cible chiffrée est dérivé (par
+	// CompletionsStore, voir US-018) dans le même `HabitCompletion.done` qu'une habitude « case
+	// à cocher ». Ces fonctions du domaine n'ont donc besoin d'aucune connaissance de `target`/
+	// `HabitProgress` : elles continuent de fonctionner à l'identique, ce que ces tests vérifient
+	// explicitement pour ne pas casser silencieusement cette hypothèse d'implémentation.
+	const targetHabit: Habit = {
+		id: 'h1',
+		name: "Boire de l'eau",
+		emoji: '💧',
+		frequency: { kind: 'interval', days: 1, anchor: '2026-08-01' },
+		createdAt: '2026-08-01',
+		target: { value: 1.5, unit: 'L' }
+	};
+
+	it('scénario 1 — cellule binaire fait/non fait identique à une habitude case à cocher', () => {
+		const completions: HabitCompletion[] = [
+			{ habitId: 'h1', date: '2026-08-12', done: true } // cumul >= cible ce jour-là
+		];
+		expect(habitCellStatus(targetHabit, '2026-08-12', completions)).toBe('done');
+		expect(habitCellStatus(targetHabit, '2026-08-13', completions)).toBe('not-done');
+	});
+
+	it('scénario 2 — pourcentage mensuel identique à une habitude case à cocher', () => {
+		const completions: HabitCompletion[] = [
+			{ habitId: 'h1', date: '2026-08-03', done: true },
+			{ habitId: 'h1', date: '2026-08-10', done: true }
+		];
+		// Habitude due tous les jours d'août (31 jours) : 2 jours "faits" (cible atteinte) / 31.
+		expect(habitMonthPercent(targetHabit, 2026, 8, completions)).toBe(6);
+	});
+
+	it('scénario 4 — historique conservé pour une habitude à cible chiffrée en pause/supprimée', () => {
+		const paused: Habit = { ...targetHabit, id: 'h2', status: 'paused' };
+		const deleted: Habit = { ...targetHabit, id: 'h3', status: 'deleted' };
+		const completions: HabitCompletion[] = [
+			{ habitId: 'h2', date: '2026-08-03', done: true },
+			{ habitId: 'h3', date: '2026-08-03', done: true }
+		];
+		expect(habitCellStatus(paused, '2026-08-03', completions)).toBe('done');
+		expect(habitCellStatus(deleted, '2026-08-03', completions)).toBe('done');
 	});
 });
 

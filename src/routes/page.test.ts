@@ -49,6 +49,15 @@ const habitEvery3Days: Habit = {
 	createdAt: today
 };
 
+const habitWithTarget: Habit = {
+	id: 'h3',
+	name: 'Boire de l’eau (cible)',
+	emoji: '💧',
+	frequency: { kind: 'interval', days: 1, anchor: addDays(today, -10) },
+	createdAt: today,
+	target: { value: 1.5, unit: 'L' }
+};
+
 const taskToday: Task = { id: 't1', name: 'Appeler le plombier', date: today, createdAt: today };
 const taskTomorrow: Task = {
 	id: 't2',
@@ -62,6 +71,7 @@ beforeEach(async () => {
 	await idbSet('tasks', [taskToday, taskTomorrow]);
 	await idbSet('habit-completions', []);
 	await idbSet('task-completions', []);
+	await idbSet('habit-progress', []);
 	habitsStore.loaded = false;
 	tasksStore.loaded = false;
 	completionsStore.loaded = false;
@@ -161,5 +171,60 @@ describe('Planning quotidien — / (US-004)', () => {
 
 		await fireEvent.click(checkbox);
 		expect(checkbox).not.toBeChecked();
+	});
+});
+
+describe('Planning quotidien — habitude à cible chiffrée (US-018, intégration store réel)', () => {
+	beforeEach(async () => {
+		await idbSet('habits', [habitWithTarget]);
+	});
+
+	it('scénarios 1/2/3/4 — ajoute des quantités jusqu’à atteindre la cible, qui passe « faite »', async () => {
+		render(Page);
+		await screen.findByText(habitWithTarget.name);
+
+		expect(screen.getByText('0 / 1,5 L')).toBeInTheDocument();
+
+		await fireEvent.click(
+			screen.getByRole('button', { name: `Ajouter une quantité pour « ${habitWithTarget.name} »` })
+		);
+		await fireEvent.input(screen.getByLabelText('Quantité à ajouter'), {
+			target: { value: '0,2' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+		expect(await screen.findByText('0,2 / 1,5 L')).toBeInTheDocument();
+
+		await fireEvent.click(
+			screen.getByRole('button', { name: `Ajouter une quantité pour « ${habitWithTarget.name} »` })
+		);
+		await fireEvent.input(screen.getByLabelText('Quantité à ajouter'), {
+			target: { value: '1,3' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+		await screen.findByText('1,5 / 1,5 L');
+		expect(screen.getByText(habitWithTarget.name)).toHaveClass('done');
+	});
+
+	it('scénario 9 — corrige la valeur cumulée directement depuis le planning', async () => {
+		render(Page);
+		await screen.findByText(habitWithTarget.name);
+
+		await fireEvent.click(
+			screen.getByRole('button', { name: `Ajouter une quantité pour « ${habitWithTarget.name} »` })
+		);
+		await fireEvent.input(screen.getByLabelText('Quantité à ajouter'), { target: { value: '2' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+		await screen.findByText('2 / 1,5 L');
+
+		await fireEvent.click(screen.getByRole('button', { name: '2 / 1,5 L' }));
+		await fireEvent.input(screen.getByLabelText('Corriger la valeur cumulée'), {
+			target: { value: '0,2' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+		expect(await screen.findByText('0,2 / 1,5 L')).toBeInTheDocument();
+		expect(screen.getByText(habitWithTarget.name)).not.toHaveClass('done');
 	});
 });

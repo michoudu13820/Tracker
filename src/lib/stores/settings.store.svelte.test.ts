@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { SettingsStore } from './settings.store.svelte';
 import type { ColorThresholds, ReminderSettings } from '$lib/domain/types';
+import { DEFAULT_FONT_CHOICE, type FontChoice } from '$lib/domain/fonts';
 import type { SettingsRepository } from '$lib/data/repositories';
 
 /**
@@ -16,12 +17,15 @@ import type { SettingsRepository } from '$lib/data/repositories';
 function fakeRepo(): SettingsRepository & {
 	savedReminders: ReminderSettings[];
 	savedThresholds: ColorThresholds[];
+	savedFontChoices: FontChoice[];
 } {
 	const savedReminders: ReminderSettings[] = [];
 	const savedThresholds: ColorThresholds[] = [];
+	const savedFontChoices: FontChoice[] = [];
 	return {
 		savedReminders,
 		savedThresholds,
+		savedFontChoices,
 		async getReminderSettings() {
 			return { enabled: false, time: '08:00', timezone: 'Europe/Paris' };
 		},
@@ -33,6 +37,12 @@ function fakeRepo(): SettingsRepository & {
 		},
 		async saveColorThresholds(t) {
 			savedThresholds.push(structuredClone(t));
+		},
+		async getFontChoice() {
+			return 'system';
+		},
+		async saveFontChoice(choice) {
+			savedFontChoices.push(choice);
 		}
 	};
 }
@@ -61,5 +71,55 @@ describe('SettingsStore (régression BUG-001)', () => {
 
 		expect(repo.savedReminders).toHaveLength(2);
 		expect(repo.savedReminders[1]).toEqual(settings);
+	});
+});
+
+describe('SettingsStore.fontChoice (US-016, défaut mis à jour par US-020)', () => {
+	it("l'état initial en mémoire (avant tout chargement) correspond à DEFAULT_FONT_CHOICE (US-020 : Dancing Script)", () => {
+		const store = new SettingsStore(fakeRepo());
+
+		expect(store.fontChoice).toBe(DEFAULT_FONT_CHOICE);
+		expect(store.fontChoice).toBe('dancing-script');
+	});
+
+	it("reflète la valeur retournée par le repository après chargement (le repository, pas le store, décide de la valeur par défaut)", async () => {
+		const repo = fakeRepo();
+		const store = new SettingsStore(repo);
+
+		await store.load();
+
+		expect(store.fontChoice).toBe('system');
+	});
+
+	it('enregistre et reflète immédiatement la police choisie', async () => {
+		const repo = fakeRepo();
+		const store = new SettingsStore(repo);
+
+		await store.saveFontChoice('inter');
+
+		expect(store.fontChoice).toBe('inter');
+		expect(repo.savedFontChoices).toEqual(['inter']);
+	});
+
+	it('réinitialise vers une police explicite (ex. système, scénario reset générique US-016)', async () => {
+		const repo = fakeRepo();
+		const store = new SettingsStore(repo);
+		await store.saveFontChoice('poppins');
+
+		await store.saveFontChoice('system');
+
+		expect(store.fontChoice).toBe('system');
+		expect(repo.savedFontChoices).toEqual(['poppins', 'system']);
+	});
+
+	it('réinitialise vers Dancing Script, nouvelle police par défaut (US-020 scénario reset)', async () => {
+		const repo = fakeRepo();
+		const store = new SettingsStore(repo);
+		await store.saveFontChoice('quicksand');
+
+		await store.saveFontChoice(DEFAULT_FONT_CHOICE);
+
+		expect(store.fontChoice).toBe('dancing-script');
+		expect(repo.savedFontChoices).toEqual(['quicksand', 'dancing-script']);
 	});
 });
