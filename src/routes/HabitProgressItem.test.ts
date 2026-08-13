@@ -25,6 +25,25 @@ describe('HabitProgressItem (US-018 scénario 1 — affichage initial)', () => {
 	});
 });
 
+describe('HabitProgressItem — signal « manquée hier » (US-025)', () => {
+	it('scénario 1 — affiche le signal quand missedYesterday est vrai', () => {
+		render(HabitProgressItem, {
+			habit,
+			value: 0,
+			done: false,
+			onAdd: vi.fn(),
+			onCorrect: vi.fn(),
+			missedYesterday: true
+		});
+		expect(screen.getByText('manquée hier')).toBeInTheDocument();
+	});
+
+	it("n'affiche aucun signal par défaut (scénarios 2/3)", () => {
+		render(HabitProgressItem, { habit, value: 0, done: false, onAdd: vi.fn(), onCorrect: vi.fn() });
+		expect(screen.queryByText('manquée hier')).toBeNull();
+	});
+});
+
 describe('HabitProgressItem — ajout via le bouton « + » (US-018 scénario 2)', () => {
 	it('ouvre la saisie libre et appelle onAdd avec le nombre saisi', async () => {
 		const onAdd = vi.fn();

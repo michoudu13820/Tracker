@@ -7,11 +7,14 @@ import {
 	emptyHabitDraft,
 	formatTargetNumber,
 	frequencyToDraft,
+	activeHabits,
 	habitStatus,
 	hasNumericTarget,
+	isDueForAutoResume,
 	isHabitActive,
 	isHabitDeleted,
 	isHabitPaused,
+	pausedOrDeletedHabits,
 	targetToDraft,
 	TARGET_UNITS,
 	targetUnitLabel,
@@ -151,6 +154,45 @@ describe('visibleHabits (US-013 scénario 3 — liste de gestion)', () => {
 		const paused = { ...baseHabit, id: 'h2', status: 'paused' as const };
 		const deleted = { ...baseHabit, id: 'h3', status: 'deleted' as const };
 		expect(visibleHabits([active, paused, deleted])).toEqual([active, paused]);
+	});
+});
+
+describe('activeHabits / pausedOrDeletedHabits (US-027 scénario 1 — regroupement par section)', () => {
+	const active = baseHabit;
+	const paused = { ...baseHabit, id: 'h2', status: 'paused' as const };
+	const deleted = { ...baseHabit, id: 'h3', status: 'deleted' as const };
+
+	it('activeHabits ne garde que les habitudes actives', () => {
+		expect(activeHabits([active, paused, deleted])).toEqual([active]);
+	});
+
+	it('pausedOrDeletedHabits regroupe en pause et supprimées, jamais les actives', () => {
+		expect(pausedOrDeletedHabits([active, paused, deleted])).toEqual([paused, deleted]);
+	});
+});
+
+describe('isDueForAutoResume (US-027 scénarios 3/4)', () => {
+	it('scénario 4 — vrai si en pause avec une date de reprise déjà atteinte', () => {
+		const habit = { ...baseHabit, status: 'paused' as const, resumeAt: '2026-08-10' };
+		expect(isDueForAutoResume(habit, '2026-08-10')).toBe(true);
+		expect(isDueForAutoResume(habit, '2026-08-15')).toBe(true);
+	});
+
+	it("faux si la date de reprise n'est pas encore atteinte", () => {
+		const habit = { ...baseHabit, status: 'paused' as const, resumeAt: '2026-08-20' };
+		expect(isDueForAutoResume(habit, '2026-08-10')).toBe(false);
+	});
+
+	it('scénario 3 — faux sans date de reprise programmée (pause indéfinie, comportement US-015 inchangé)', () => {
+		const habit = { ...baseHabit, status: 'paused' as const };
+		expect(isDueForAutoResume(habit, '2026-08-10')).toBe(false);
+	});
+
+	it("faux pour une habitude active ou supprimée, même avec une date passée", () => {
+		expect(isDueForAutoResume({ ...baseHabit, resumeAt: '2026-08-01' }, '2026-08-10')).toBe(false);
+		expect(
+			isDueForAutoResume({ ...baseHabit, status: 'deleted', resumeAt: '2026-08-01' }, '2026-08-10')
+		).toBe(false);
 	});
 });
 

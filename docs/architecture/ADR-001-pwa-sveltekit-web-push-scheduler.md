@@ -122,6 +122,47 @@ découplé de l'app. On peut supprimer ces fonctions et l'app reste utilisable (
 - **Risque de purge du stockage iOS** (IndexedDB) : mitigé par l'installation écran d'accueil
   (exemption de la purge 7 jours) + `navigator.storage.persist()` + export/import JSON.
 
+## Amendement (2026-08-12) — révision du volet « contenu de notification non nominatif »
+
+**Statut de l'ADR** : reste **accepté**, décision d'origine inchangée. Cet amendement ne
+révise qu'**un sous-point** de la décision (le contenu du push), pas le choix architectural
+lui-même (PWA + micro-scheduler Netlify).
+
+**Ce qui change** : la Décision ci-dessus posait « le contenu du push est générique […]. Le
+nom des habitudes […] ne transite pas ». Ce principe est **révisé sur décision assumée de
+l'utilisateur** (téléphone personnel, risque de confidentialité jugé acceptable) : le contenu
+du push **peut désormais nommer** l'élément concerné, mais **uniquement** pour le nouveau
+rappel déclenché par l'heure limite d'une tâche ponctuelle (voir
+[US-021](../../US/done/US-021-heure-limite-tache-ponctuelle.md) et
+[US-022](../../US/done/US-022-rappel-push-nominatif-heure-limite-tache.md)). Le
+récap matinal générique des habitudes (US-007) n'est pas concerné par ce changement et reste
+non nominatif.
+
+**Ce qui ne change pas** : la limite « le serveur ne connaît pas l'état de complétion »
+(section Conséquences ci-dessus, « Awareness de complétion […] devient best-effort ») **reste
+entière**. Nommer un élément dans le push ne dispense pas d'une resynchronisation de la
+fenêtre d'échéances avant l'heure d'envoi pour espérer éviter un rappel sur un élément déjà
+fait — voir [US-023](../../US/to_be_implemented/US-023-resynchronisation-echeances-a-chaque-cochage.md),
+qui étend ce mécanisme de resynchronisation (déclenché désormais à chaque cochage, pas
+seulement à l'ouverture de l'app) sans lever la nature best-effort du compromis.
+
+**Conséquence assumée sur la répartition des responsabilités** : cet amendement **entame** le
+principe posé plus haut selon lequel Netlify Blobs ne stocke « uniquement souscription +
+timestamps d'envoi, aucune donnée métier ». Le micro-scheduler cron n'ayant aucune autre
+source de vérité au moment de l'émission, le **libellé de la tâche devra être persisté dans
+Blobs** aux côtés de son timestamp d'échéance, jusqu'à l'envoi du push. Ce n'est donc plus
+« aucune donnée métier » : c'est « aucune donnée métier **autre que** le libellé des tâches à
+heure limite de la fenêtre glissante en cours ».
+
+Ce que cela implique, à trancher à l'implémentation d'US-022 :
+- la durée de rétention de ces libellés côté serveur (a minima : purge après émission, et
+  purge des échéances passées à chaque resynchronisation de la fenêtre) ;
+- le fait que le récap matinal des habitudes (US-007) reste, lui, sans aucun libellé stocké —
+  la dérogation est circonscrite aux tâches ponctuelles à heure limite.
+
+Le reste de la décision d'origine (pas de compte utilisateur, pas de synchronisation des
+données métier, IndexedDB comme unique source de vérité côté client) est inchangé.
+
 ## Liens
 
 - [Benchmark framework mobile — Habit Tracker iOS](../../benchmarks/benchmark-habit-tracker-ios-2026-08-09.md) (recommandation Flutter, disqualification PWA pure — révisée ici)

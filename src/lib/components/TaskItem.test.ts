@@ -155,6 +155,30 @@ describe('TaskItem — carte horizontale pleine largeur (US-010 scénario 5)', (
 	});
 });
 
+describe('TaskItem — heure limite optionnelle (US-021 scénario 1)', () => {
+	it("affiche l'heure limite sur la carte quand elle est renseignée", () => {
+		render(TaskItem, {
+			task: { ...task, dueTime: '14:30' },
+			done: false,
+			today: '2026-08-12',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn()
+		});
+		expect(screen.getByText(/14:30/)).toBeInTheDocument();
+	});
+
+	it("n'affiche rien de plus si l'heure limite n'est pas renseignée (scénario 2, US-002 non régressée)", () => {
+		render(TaskItem, {
+			task,
+			done: false,
+			today: '2026-08-12',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn()
+		});
+		expect(screen.queryByText(/jusqu'à/)).toBeNull();
+	});
+});
+
 describe('TaskItem — édition optionnelle', () => {
 	it("n'affiche pas de bouton Modifier si onEdit n'est pas fourni", () => {
 		render(TaskItem, {

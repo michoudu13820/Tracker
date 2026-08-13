@@ -63,6 +63,9 @@ export function isTaskDone(completions: TaskCompletion[], taskId: string): boole
 export interface TaskDraft {
 	name: string;
 	date: IsoDate | null;
+	/** Heure limite optionnelle saisie (US-021), format `HH:MM` ou `null`/vide si non renseignée.
+	 * Arrondie au quart d'heure au moment de la construction du `Task` (voir `TaskForm`). */
+	dueTime?: string | null;
 }
 
 export interface TaskValidation {

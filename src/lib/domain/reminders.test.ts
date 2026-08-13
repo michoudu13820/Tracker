@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { computeReminderWindow } from './reminders';
-import type { Habit, HabitCompletion, ReminderSettings } from './types';
+import { computeReminderWindow, computeTaskReminderWindow, computeWeeklyReviewWindow } from './reminders';
+import type {
+	Habit,
+	HabitCompletion,
+	ReminderSettings,
+	Task,
+	TaskCompletion,
+	WeeklyReviewSettings
+} from './types';
 
 const settings: ReminderSettings = { enabled: true, time: '08:00', timezone: 'Europe/Paris' };
 
@@ -77,5 +84,114 @@ describe('computeReminderWindow', () => {
 		// Pas de `completions` passé (comportement par défaut avant réouverture de l'app).
 		const window = computeReminderWindow([habit], settings, 1, now);
 		expect(window.map((r) => r.date)).toEqual(['2026-08-10']);
+	});
+});
+
+describe('computeTaskReminderWindow (US-022)', () => {
+	const now = new Date(2026, 7, 10, 6, 0, 0); // 2026-08-10 06:00
+
+	const edf: Task = {
+		id: 't1',
+		name: 'Payer facture EDF',
+		date: '2026-08-10',
+		createdAt: '2026-08-01',
+		dueTime: '18:00'
+	};
+	const plumber: Task = {
+		id: 't2',
+		name: 'Appeler le plombier',
+		date: '2026-08-10',
+		createdAt: '2026-08-01',
+		dueTime: '18:00'
+	};
+
+	it('scénario 1 — nomme explicitement une tâche unique', () => {
+		const window = computeTaskReminderWindow([edf], settings, 30, now);
+		expect(window).toHaveLength(1);
+		expect(window[0].body).toBe('Payer facture EDF — à faire avant 18:00');
+		expect(window[0].sendAt).toBe(new Date(2026, 7, 10, 18, 0, 0).getTime());
+	});
+
+	it('scénario 2 — groupe en un seul rappel les tâches du même créneau de 15 minutes', () => {
+		const window = computeTaskReminderWindow([edf, plumber], settings, 30, now);
+		expect(window).toHaveLength(1);
+		expect(window[0].body).toBe(
+			'2 tâches arrivent à échéance : Payer facture EDF, Appeler le plombier'
+		);
+	});
+
+	it("ne fusionne pas deux créneaux différents de la même journée", () => {
+		const later: Task = { ...plumber, id: 't3', dueTime: '18:15' };
+		const window = computeTaskReminderWindow([edf, later], settings, 30, now);
+		expect(window).toHaveLength(2);
+	});
+
+	it("scénario 3 — aucun rappel pour une tâche sans heure limite", () => {
+		const noTime: Task = { ...edf, dueTime: undefined };
+		const window = computeTaskReminderWindow([noTime], settings, 30, now);
+		expect(window).toEqual([]);
+	});
+
+	it('scénario 4 — best-effort : aucun rappel pour une tâche déjà faite (resynchronisée)', () => {
+		const completions: TaskCompletion[] = [{ taskId: edf.id, done: true }];
+		const window = computeTaskReminderWindow([edf], settings, 30, now, completions);
+		expect(window).toEqual([]);
+	});
+
+	it('scénario 4 — sans resynchronisation (pas de complétion transmise), le rappel reste programmé malgré la complétion réelle', () => {
+		// Pas de `completions` passé : comportement par défaut avant réouverture de l'app.
+		const window = computeTaskReminderWindow([edf], settings, 30, now);
+		expect(window).toHaveLength(1);
+	});
+
+	it('scénario 6 — aucun rappel si les rappels sont désactivés globalement', () => {
+		const window = computeTaskReminderWindow([edf], { ...settings, enabled: false }, 30, now);
+		expect(window).toEqual([]);
+	});
+
+	it('exclut une tâche supprimée (US-014, soft-delete)', () => {
+		const deleted: Task = { ...edf, status: 'deleted' };
+		const window = computeTaskReminderWindow([deleted], settings, 30, now);
+		expect(window).toEqual([]);
+	});
+
+	it("exclut un instant déjà passé", () => {
+		const past: Task = { ...edf, dueTime: '05:00' };
+		const window = computeTaskReminderWindow([past], settings, 30, now);
+		expect(window).toEqual([]);
+	});
+
+	it("exclut une tâche datée au-delà de l'horizon de la fenêtre", () => {
+		const farAway: Task = { ...edf, date: '2026-12-25' };
+		const window = computeTaskReminderWindow([farAway], settings, 5, now);
+		expect(window).toEqual([]);
+	});
+});
+
+describe('computeWeeklyReviewWindow (US-028)', () => {
+	const weeklySettings: WeeklyReviewSettings = { enabled: true, weekday: 0, time: '18:00' }; // dimanche 18h
+
+	it('scénario 1 — programme un rappel chaque semaine au jour/heure choisis', () => {
+		const now = new Date(2026, 7, 10, 6, 0, 0); // lundi 10/08/2026
+		const window = computeWeeklyReviewWindow(weeklySettings, 30, now);
+		expect(window.map((r) => r.date)).toEqual([
+			'2026-08-16',
+			'2026-08-23',
+			'2026-08-30',
+			'2026-09-06'
+		]);
+		expect(window[0].sendAt).toBe(new Date(2026, 7, 16, 18, 0, 0).getTime());
+	});
+
+	it('scénario 3 — ne programme rien si désactivée', () => {
+		const now = new Date(2026, 7, 10, 6, 0, 0);
+		expect(computeWeeklyReviewWindow({ ...weeklySettings, enabled: false }, 30, now)).toEqual([]);
+	});
+
+	it("exclut l'instant déjà passé le jour même", () => {
+		const mondaySettings: WeeklyReviewSettings = { enabled: true, weekday: 1, time: '08:00' };
+		const now = new Date(2026, 7, 10, 9, 0, 0); // lundi 09:00, après 08:00
+		const window = computeWeeklyReviewWindow(mondaySettings, 8, now);
+		expect(window.map((r) => r.date)).toEqual(['2026-08-17']);
 	});
 });

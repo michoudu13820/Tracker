@@ -16,7 +16,7 @@ function pointer(el: Element, type: 'pointerdown' | 'pointerup', clientX: number
 	return fireEvent(el, new MouseEvent(type, { clientX, bubbles: true, cancelable: true }));
 }
 
-/** Props communes par défaut, surchargeables par test (US-013 + US-015). */
+/** Props communes par défaut, surchargeables par test (US-013 + US-015 + US-024). */
 function baseProps(overrides: Partial<Record<string, unknown>> = {}) {
 	return {
 		habit,
@@ -27,6 +27,12 @@ function baseProps(overrides: Partial<Record<string, unknown>> = {}) {
 		onDelete: vi.fn(),
 		onPause: vi.fn(),
 		onResume: vi.fn(),
+		onSetResumeAt: vi.fn(),
+		completions: [],
+		// Égal à l'ancrage de l'habitude de base : "hier" (2026-07-31) tombe avant l'ancrage,
+		// donc jamais dû → n'active jamais accidentellement le signal "manquée hier" (US-025)
+		// dans les tests qui ne portent pas spécifiquement sur ce scénario.
+		today: '2026-08-01',
 		...overrides
 	};
 }
@@ -138,6 +144,152 @@ describe('HabitCard (US-015 — pause/reprise)', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Réactiver' }));
 		expect(onResume).toHaveBeenCalledWith(pausedHabit);
+	});
+});
+
+describe('HabitCard — habitude supprimée, lecture seule (US-027 scénario 2)', () => {
+	const deletedHabit: Habit = { ...habit, status: 'deleted' };
+
+	it('affiche un badge « Supprimée », sans action de modification', () => {
+		render(HabitCard, baseProps({ habit: deletedHabit }));
+
+		expect(screen.getByText('Supprimée')).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: /^Yoga/ })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Mettre en pause' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Réactiver' })).toBeNull();
+		expect(screen.queryByRole('button', { name: /Supprimer/ })).toBeNull();
+	});
+});
+
+describe('HabitCard — date de reprise automatique (US-027 scénarios 3/5)', () => {
+	const pausedHabit: Habit = { ...habit, status: 'paused' };
+
+	it("propose de programmer une date de reprise pour une habitude en pause sans date", () => {
+		render(HabitCard, baseProps({ habit: pausedHabit }));
+		expect(
+			screen.getByRole('button', { name: '+ Date de reprise automatique' })
+		).toBeInTheDocument();
+	});
+
+	it('scénario 3 — programme une date de reprise automatique', async () => {
+		const onSetResumeAt = vi.fn();
+		render(HabitCard, baseProps({ habit: pausedHabit, onSetResumeAt }));
+
+		await fireEvent.click(screen.getByRole('button', { name: '+ Date de reprise automatique' }));
+		await fireEvent.input(screen.getByLabelText('Date de reprise automatique (optionnel)'), {
+			target: { value: '2026-09-01' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Valider' }));
+
+		expect(onSetResumeAt).toHaveBeenCalledWith(pausedHabit, '2026-09-01');
+	});
+
+	it('affiche la date déjà programmée pour une habitude en pause avec resumeAt', () => {
+		const withResume: Habit = { ...pausedHabit, resumeAt: '2026-09-01' };
+		render(HabitCard, baseProps({ habit: withResume }));
+
+		expect(screen.getByText('🔁 Reprise auto : 01/09/2026')).toBeInTheDocument();
+	});
+
+	it('scénario 5 — retire la date de reprise automatique déjà programmée', async () => {
+		const withResume: Habit = { ...pausedHabit, resumeAt: '2026-09-01' };
+		const onSetResumeAt = vi.fn();
+		render(HabitCard, baseProps({ habit: withResume, onSetResumeAt }));
+
+		await fireEvent.click(screen.getByRole('button', { name: '🔁 Reprise auto : 01/09/2026' }));
+		await fireEvent.input(screen.getByLabelText('Date de reprise automatique (optionnel)'), {
+			target: { value: '' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Valider' }));
+
+		expect(onSetResumeAt).toHaveBeenCalledWith(withResume, undefined);
+	});
+
+	it("n'affiche aucun contrôle de reprise automatique pour une habitude active", () => {
+		render(HabitCard, baseProps());
+		expect(screen.queryByText(/Reprise auto/)).toBeNull();
+		expect(screen.queryByRole('button', { name: /Date de reprise automatique/ })).toBeNull();
+	});
+});
+
+describe('HabitCard — indicateur de régularité apaisé (US-024)', () => {
+	const dailyHabit: Habit = {
+		id: 'h2',
+		name: "Boire de l'eau",
+		emoji: '💧',
+		frequency: { kind: 'interval', days: 1, anchor: '2026-08-01' },
+		createdAt: '2026-08-01'
+	};
+
+	it('scénario 1 — affiche 7 pastilles de régularité', () => {
+		render(HabitCard, baseProps({ habit: dailyHabit }));
+
+		const region = screen.getByLabelText('Régularité des 7 derniers jours');
+		expect(region.querySelectorAll('[role="img"]')).toHaveLength(7);
+	});
+
+	it('scénario 2 — affiche un compteur mensuel neutre', () => {
+		const completions = [
+			{ habitId: dailyHabit.id, date: '2026-08-01', done: true },
+			{ habitId: dailyHabit.id, date: '2026-08-02', done: true }
+		];
+		render(HabitCard, baseProps({ habit: dailyHabit, completions, today: '2026-08-12' }));
+
+		expect(screen.getByText('2 fois ce mois-ci')).toBeInTheDocument();
+	});
+
+	it("scénario 3 — n'affiche jamais de mécanique de streak (flamme, jours d'affilée, série)", () => {
+		render(HabitCard, baseProps({ habit: dailyHabit }));
+
+		expect(screen.queryByText(/🔥/)).toBeNull();
+		expect(screen.queryByText(/jours? d'affilée/i)).toBeNull();
+		expect(screen.queryByText(/série/i)).toBeNull();
+		expect(screen.queryByText(/record/i)).toBeNull();
+	});
+
+	it("scénario 4 — distingue les jours non concernés des jours manqués (fréquence hebdomadaire)", () => {
+		const weekdaysHabit: Habit = {
+			id: 'h3',
+			name: 'Yoga',
+			emoji: '🧘',
+			frequency: { kind: 'weekdays', weekdays: [1, 3, 5] },
+			createdAt: '2026-07-01'
+		};
+		// 2026-08-09 = dimanche : lundi 03/08 est "manqué" (dû, non fait), mardi 04/08 est
+		// "non concerné" (jamais dû ce jour-là).
+		render(HabitCard, baseProps({ habit: weekdaysHabit, today: '2026-08-09' }));
+
+		expect(screen.getByLabelText('Lun : manqué')).toBeInTheDocument();
+		expect(screen.getByLabelText('Mar : non concerné')).toBeInTheDocument();
+	});
+});
+
+describe('HabitCard — signal « manquée hier » (US-025)', () => {
+	const dailyHabit: Habit = {
+		id: 'h4',
+		name: 'Méditer',
+		emoji: '🧘',
+		frequency: { kind: 'interval', days: 1, anchor: '2026-08-01' },
+		createdAt: '2026-08-01'
+	};
+
+	it('scénario 1 — affiche « manquée hier » si due hier et non cochée', () => {
+		// today = jeudi 13/08 → hier = mercredi 12/08, due (intervalle 1 jour), aucune complétion.
+		render(HabitCard, baseProps({ habit: dailyHabit, today: '2026-08-13', completions: [] }));
+		expect(screen.getByText('manquée hier')).toBeInTheDocument();
+	});
+
+	it('scénario 3 — aucun signal si hier a été cochée faite', () => {
+		const completions = [{ habitId: dailyHabit.id, date: '2026-08-12', done: true }];
+		render(HabitCard, baseProps({ habit: dailyHabit, today: '2026-08-13', completions }));
+		expect(screen.queryByText('manquée hier')).toBeNull();
+	});
+
+	it("scénario 5 — n'ajoute aucune action de reprogrammation quand le signal est affiché", () => {
+		render(HabitCard, baseProps({ habit: dailyHabit, today: '2026-08-13', completions: [] }));
+		expect(screen.getByText('manquée hier')).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: /reprogram/i })).toBeNull();
+		expect(screen.queryByRole('button', { name: /rattrap/i })).toBeNull();
 	});
 });
 

@@ -5,6 +5,9 @@
 	 *   - Rappels par notification (US-007) : implémenté ci-dessous. `settingsStore.reminder`
 	 *     porte la préférence persistée (heure, activation), `remindersStore` orchestre le
 	 *     canal Web Push (permission, souscription, synchronisation de la fenêtre).
+	 *   - Revue hebdomadaire poussée (US-028) : implémentée ci-dessous. `settingsStore.weeklyReview`
+	 *     porte la préférence persistée (jour, heure, activation indépendante du rappel quotidien),
+	 *     synchronisée sur le même canal push que US-007/US-022 via `remindersStore`.
 	 *   - Sauvegarde / restauration (US-008) : PLACEHOLDER, hors périmètre de cette session.
 	 *     Export/import JSON via $lib/data/backup.
 	 *   - Police de caractères (US-016, catalogue étendu + défaut Dancing Script par US-020) :
@@ -15,12 +18,15 @@
 	import { settingsStore } from '$lib/stores/settings.store.svelte';
 	import { remindersStore } from '$lib/stores/reminders.store.svelte';
 	import { habitsStore } from '$lib/stores/habits.store.svelte';
+	import { tasksStore } from '$lib/stores/tasks.store.svelte';
 	import { completionsStore } from '$lib/stores/completions.store.svelte';
 	import { DEFAULT_THRESHOLDS } from '$lib/domain/summary';
 	import { DEFAULT_FONT_CHOICE, type FontChoice } from '$lib/domain/fonts';
-	import type { ColorThresholds } from '$lib/domain/types';
+	import { roundTimeToQuarterHour } from '$lib/domain/dates';
+	import type { ColorThresholds, Weekday } from '$lib/domain/types';
 	import ColorThresholdsForm from './ColorThresholdsForm.svelte';
 	import ReminderSettingsForm from './ReminderSettingsForm.svelte';
+	import WeeklyReviewSettingsForm from './WeeklyReviewSettingsForm.svelte';
 	import FontSelector from './FontSelector.svelte';
 
 	let enabling = $state(false);
@@ -29,6 +35,7 @@
 	onMount(() => {
 		void settingsStore.load();
 		void habitsStore.load();
+		void tasksStore.load();
 		void completionsStore.load();
 	});
 
@@ -59,7 +66,10 @@
 			const subscription = await remindersStore.enable(
 				habitsStore.habits,
 				{ ...current, enabled: true },
-				completionsStore.habitCompletions
+				completionsStore.habitCompletions,
+				tasksStore.tasks,
+				completionsStore.taskCompletions,
+				settingsStore.weeklyReview ?? undefined
 			);
 			if (!subscription) {
 				// Scénario 5 : refus (ou impossibilité) — état visible, rien n'est activé silencieusement.
@@ -80,8 +90,54 @@
 		const updated = { ...current, time };
 		await settingsStore.saveReminder(updated);
 		if (updated.enabled) {
-			await remindersStore.sync(habitsStore.habits, updated, completionsStore.habitCompletions);
+			await remindersStore.sync(
+				habitsStore.habits,
+				updated,
+				completionsStore.habitCompletions,
+				tasksStore.tasks,
+				completionsStore.taskCompletions,
+				settingsStore.weeklyReview ?? undefined
+			);
 		}
+	}
+
+	/** Resynchronise les trois fenêtres après un changement de réglage de revue hebdomadaire
+	 * (US-028), si les rappels quotidiens sont actifs (même souscription push). */
+	async function syncIfDailyEnabled() {
+		if (!settingsStore.reminder?.enabled) return;
+		await remindersStore.sync(
+			habitsStore.habits,
+			settingsStore.reminder,
+			completionsStore.habitCompletions,
+			tasksStore.tasks,
+			completionsStore.taskCompletions,
+			settingsStore.weeklyReview ?? undefined
+		);
+	}
+
+	/** US-028 scénario 3 : (dés)active la revue hebdomadaire, indépendamment du rappel quotidien. */
+	async function handleToggleWeeklyReview(nextEnabled: boolean) {
+		const current = settingsStore.weeklyReview;
+		if (!current) return;
+		await settingsStore.saveWeeklyReview({ ...current, enabled: nextEnabled });
+		await syncIfDailyEnabled();
+	}
+
+	/** US-028 scénario 1 : changement du jour de la revue hebdomadaire. */
+	async function handleWeeklyReviewWeekdayChange(weekday: Weekday) {
+		const current = settingsStore.weeklyReview;
+		if (!current) return;
+		await settingsStore.saveWeeklyReview({ ...current, weekday });
+		await syncIfDailyEnabled();
+	}
+
+	/** US-028 scénario 1 : changement d'heure de la revue hebdomadaire, arrondie au quart d'heure
+	 * (même règle qu'US-021, dictée par la granularité du scheduler serveur). */
+	async function handleWeeklyReviewTimeChange(time: string) {
+		const current = settingsStore.weeklyReview;
+		if (!current) return;
+		await settingsStore.saveWeeklyReview({ ...current, time: roundTimeToQuarterHour(time) });
+		await syncIfDailyEnabled();
 	}
 
 	/** US-016 scénario 3 : applique et persiste immédiatement la police choisie. */
@@ -109,6 +165,17 @@
 		{enableError}
 		onToggle={handleToggleReminders}
 		onTimeChange={handleTimeChange}
+	/>
+</section>
+
+<section aria-labelledby="weekly-review-heading">
+	<h2 id="weekly-review-heading">Revue hebdomadaire</h2>
+	<WeeklyReviewSettingsForm
+		dailyRemindersEnabled={settingsStore.reminder?.enabled ?? false}
+		settings={settingsStore.weeklyReview}
+		onToggle={handleToggleWeeklyReview}
+		onWeekdayChange={handleWeeklyReviewWeekdayChange}
+		onTimeChange={handleWeeklyReviewTimeChange}
 	/>
 </section>
 

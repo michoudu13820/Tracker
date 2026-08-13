@@ -15,7 +15,8 @@ import {
 	weekdayShortLabelFr,
 	dateStripRange,
 	formatIsoDateLongFr,
-	formatPlanningTitleFr
+	formatPlanningTitleFr,
+	roundTimeToQuarterHour
 } from './dates';
 
 describe('toIsoDate / fromIsoDate', () => {
@@ -155,5 +156,25 @@ describe('formatPlanningTitleFr (US-012)', () => {
 		const today = '2026-08-12';
 		expect(formatPlanningTitleFr('2026-08-20', today)).not.toBe("Planning d'aujourd'hui");
 		expect(formatPlanningTitleFr(today, today)).toBe("Planning d'aujourd'hui");
+	});
+});
+
+describe('roundTimeToQuarterHour (US-021 scénario 3)', () => {
+	it('laisse inchangée une heure déjà alignée sur le quart d\'heure', () => {
+		expect(roundTimeToQuarterHour('14:30')).toBe('14:30');
+		expect(roundTimeToQuarterHour('09:00')).toBe('09:00');
+		expect(roundTimeToQuarterHour('09:15')).toBe('09:15');
+		expect(roundTimeToQuarterHour('09:45')).toBe('09:45');
+	});
+
+	it('arrondit au quart d\'heure le plus proche', () => {
+		expect(roundTimeToQuarterHour('14:07')).toBe('14:00');
+		expect(roundTimeToQuarterHour('14:08')).toBe('14:15');
+		expect(roundTimeToQuarterHour('14:22')).toBe('14:15');
+		expect(roundTimeToQuarterHour('14:23')).toBe('14:30');
+	});
+
+	it('gère le débordement de fin de journée', () => {
+		expect(roundTimeToQuarterHour('23:53')).toBe('00:00');
 	});
 });

@@ -1,7 +1,8 @@
 <script lang="ts">
 	/**
-	 * Formulaire de création/édition d'une habitude (US-001). Colocalisé dans la route
-	 * `habitudes` car utilisé uniquement ici. Logique de validation/conversion déléguée
+	 * Formulaire de création/édition d'une habitude (US-001). Partagé entre `/habitudes` et
+	 * l'ajout rapide depuis le planning `/` (US-026) — déplacé dans `$lib/components` dès son
+	 * usage par une 2ᵉ route (voir CONVENTIONS.md §7). Logique de validation/conversion déléguée
 	 * à `$lib/domain/habits` (pure, testée séparément) — ce composant ne fait qu'assembler
 	 * l'état de saisie et appeler le domaine.
 	 */

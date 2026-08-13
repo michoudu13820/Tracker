@@ -3,16 +3,16 @@
 	 * Route « Tâches » — liste + création/édition des tâches ponctuelles (US-002),
 	 * signalement et reprogrammation des tâches en retard (US-003). State : `tasksStore` +
 	 * `completionsStore`. Rendu de chaque tâche délégué à `TaskItem` (partagé avec le
-	 * planning `/`, US-004).
+	 * planning `/`, US-004) ; `TaskForm` partagé avec l'ajout rapide du planning (US-026).
 	 */
 	import { onMount } from 'svelte';
 	import { tasksStore } from '$lib/stores/tasks.store.svelte';
 	import { completionsStore } from '$lib/stores/completions.store.svelte';
+	import { resyncReminders } from '$lib/stores/resync-reminders';
 	import { toIsoDate } from '$lib/domain/dates';
 	import { visibleTasks } from '$lib/domain/tasks';
 	import type { IsoDate, Task } from '$lib/domain/types';
-	import { TaskItem } from '$lib/components';
-	import TaskForm from './TaskForm.svelte';
+	import { TaskItem, TaskForm } from '$lib/components';
 
 	let formOpen = $state(false);
 	let editingTask = $state<Task | undefined>(undefined);
@@ -49,8 +49,10 @@
 		editingTask = undefined;
 	}
 
+	/** Coche/décoche une tâche et resynchronise la fenêtre de rappels (US-023 scénarios 1/2/5). */
 	async function handleToggle(taskId: string, done: boolean) {
 		await completionsStore.setTaskDone(taskId, done, done ? today : undefined);
+		await resyncReminders();
 	}
 
 	async function handleReschedule(taskId: string, newDate: IsoDate) {

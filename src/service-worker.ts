@@ -85,13 +85,24 @@ sw.addEventListener('push', (event) => {
 	);
 });
 
+/**
+ * Destination d'ouverture selon le type de rappel (`tag`, voir `sendDueReminders` côté serveur) :
+ * la revue hebdomadaire poussée (US-028 scénario 2) ouvre directement `/resume`, où le
+ * récapitulatif de la semaine (US-005) est déjà consultable ; tout le reste (récap quotidien
+ * générique, rappel nominatif de tâche) ouvre le planning `/` comme avant.
+ */
+function urlForTag(tag: string | undefined): string {
+	return tag === 'weekly-review' ? '/resume' : '/';
+}
+
 sw.addEventListener('notificationclick', (event) => {
+	const url = urlForTag(event.notification.tag);
 	event.notification.close();
 	event.waitUntil(
 		sw.clients.matchAll({ type: 'window' }).then((clients) => {
 			const existing = clients.find((c) => 'focus' in c);
-			if (existing) return existing.focus();
-			return sw.clients.openWindow('/');
+			if (existing) return existing.focus().then(() => existing.navigate(url));
+			return sw.clients.openWindow(url);
 		})
 	);
 });

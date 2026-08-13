@@ -47,6 +47,14 @@ export interface Habit {
 	/** Cible chiffrée optionnelle (US-017). `undefined` = habitude « case à cocher » classique
 	 * (comportement historique inchangé, US-001/US-004), rétro-compatible par défaut. */
 	target?: HabitTarget;
+	/**
+	 * Date de reprise automatique optionnelle (US-027), pertinente uniquement quand
+	 * `status === 'paused'` : dès que ce jour est atteint (à l'ouverture de l'app, best-effort
+	 * — pas de mécanisme serveur dédié), l'habitude redevient automatiquement `'active'` et ce
+	 * champ est retiré. `undefined` = pause indéfinie jusqu'à réactivation manuelle
+	 * (comportement historique d'US-015, inchangé par défaut).
+	 */
+	resumeAt?: IsoDate;
 }
 
 /**
@@ -65,6 +73,14 @@ export interface Task {
 	date: IsoDate;
 	createdAt: IsoDate;
 	status?: TaskRecordStatus;
+	/**
+	 * Heure limite optionnelle (US-021), format `HH:MM`, toujours alignée sur le quart d'heure
+	 * (`:00`, `:15`, `:30`, `:45` — cf. `$lib/domain/dates#roundTimeToQuarterHour`). `undefined` =
+	 * pas d'heure limite (comportement historique inchangé, US-002/US-004). Consommée par le
+	 * rappel push nominatif (US-022) : granularité du scheduler serveur (~15 min, ADR-001), jamais
+	 * de précision à la minute.
+	 */
+	dueTime?: string;
 }
 
 /** Complétion d'une habitude un jour donné (historique 100% local). */
@@ -100,6 +116,22 @@ export interface ReminderSettings {
 	time: string;
 	/** Fuseau IANA de l'appareil, ex. `Europe/Paris`. */
 	timezone: string;
+}
+
+/**
+ * Réglages de la revue hebdomadaire poussée (US-028) : activation **indépendante** du rappel
+ * quotidien (US-007, scénario 3), mais nécessite tout de même une souscription push active
+ * (elle-même conditionnée à `ReminderSettings.enabled`) pour pouvoir être envoyée — pas de canal
+ * push séparé. Contenu du push générique, non nominatif : ne remonte au serveur qu'un second
+ * jeu d'instants d'envoi (même principe qu'ADR-001).
+ */
+export interface WeeklyReviewSettings {
+	enabled: boolean;
+	/** Jour de la semaine du créneau (0 = dimanche … 6 = samedi, aligné sur `Weekday`). */
+	weekday: Weekday;
+	/** Heure locale, format `HH:MM`, alignée sur le quart d'heure (même granularité qu'US-021,
+	 * dictée par le scheduler serveur ~15 min). */
+	time: string;
 }
 
 /** Seuils de couleur du résumé annuel (US-005 / US-006). */

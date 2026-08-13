@@ -10,9 +10,12 @@
 		habit: Habit;
 		done: boolean;
 		onToggle: (habitId: string, done: boolean) => void;
+		/** Signal doux « manquée hier » (US-025) — informatif uniquement, aucune action de
+		 * reprogrammation associée. */
+		missedYesterday?: boolean;
 	}
 
-	let { habit, done, onToggle }: Props = $props();
+	let { habit, done, onToggle, missedYesterday = false }: Props = $props();
 </script>
 
 <li class="habit-item">
@@ -25,6 +28,9 @@
 		/>
 		<span class="emoji" aria-hidden="true">{habit.emoji}</span>
 		<span class="name" class:done>{habit.name}</span>
+		{#if missedYesterday}
+			<span class="badge" data-status="missed-yesterday">manquée hier</span>
+		{/if}
 	</label>
 </li>
 
@@ -56,5 +62,17 @@
 	.name.done {
 		text-decoration: line-through;
 		color: var(--muted);
+	}
+	.badge {
+		font-size: 0.7rem;
+		padding: 0.15rem 0.6rem;
+		border-radius: 1rem;
+		white-space: nowrap;
+		font-weight: 600;
+	}
+	.badge[data-status='missed-yesterday'] {
+		color: var(--habit-text);
+		background: var(--surface);
+		border: 1px solid var(--habit-border);
 	}
 </style>

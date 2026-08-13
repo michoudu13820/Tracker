@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import Page from './+page.svelte';
 import { habitsStore } from '$lib/stores/habits.store.svelte';
 import { tasksStore } from '$lib/stores/tasks.store.svelte';
 import { completionsStore } from '$lib/stores/completions.store.svelte';
+import { settingsStore } from '$lib/stores/settings.store.svelte';
+import { remindersStore } from '$lib/stores/reminders.store.svelte';
 import { toIsoDate, addDays, formatIsoDateLongFr } from '$lib/domain/dates';
-import type { Habit, Task } from '$lib/domain/types';
+import type { Habit, ReminderSettings, Task } from '$lib/domain/types';
 
 /**
  * Test d'assemblage de la route « Aujourd'hui » (US-004) : filtrage des habitudes/tâches du
@@ -171,6 +173,130 @@ describe('Planning quotidien — / (US-004)', () => {
 
 		await fireEvent.click(checkbox);
 		expect(checkbox).not.toBeChecked();
+	});
+});
+
+describe('Planning quotidien — resynchronisation des rappels au cochage (US-023)', () => {
+	const enabledSettings: ReminderSettings = { enabled: true, time: '08:00', timezone: 'Europe/Paris' };
+
+	beforeEach(() => {
+		settingsStore.reminder = enabledSettings;
+	});
+
+	afterEach(() => {
+		settingsStore.reminder = null;
+		vi.restoreAllMocks();
+	});
+
+	it('scénario 1 — cocher une habitude resynchronise immédiatement la fenêtre de rappels', async () => {
+		const sync = vi.spyOn(remindersStore, 'sync').mockResolvedValue();
+		render(Page);
+		await screen.findByText("Boire de l'eau");
+
+		await fireEvent.click(
+			screen.getByRole('checkbox', { name: "Marquer « Boire de l'eau » comme faite" })
+		);
+
+		expect(sync).toHaveBeenCalledTimes(1);
+	});
+
+	it('scénario 2 — décocher une habitude resynchronise également la fenêtre', async () => {
+		const sync = vi.spyOn(remindersStore, 'sync').mockResolvedValue();
+		render(Page);
+		await screen.findByText("Boire de l'eau");
+
+		const checkbox = screen.getByRole('checkbox', {
+			name: "Marquer « Boire de l'eau » comme faite"
+		});
+		await fireEvent.click(checkbox);
+		await fireEvent.click(checkbox);
+
+		expect(sync).toHaveBeenCalledTimes(2);
+	});
+
+	it('scénario 5 — cocher une tâche resynchronise également la fenêtre', async () => {
+		const sync = vi.spyOn(remindersStore, 'sync').mockResolvedValue();
+		render(Page);
+		await screen.findByText('Appeler le plombier');
+
+		await fireEvent.click(
+			screen.getByRole('checkbox', { name: 'Marquer « Appeler le plombier » comme faite' })
+		);
+
+		expect(sync).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('Planning quotidien — ajout rapide (US-026)', () => {
+	it('scénario 1 — le bouton d\'ajout rapide est visible quel que soit le jour affiché', async () => {
+		render(Page);
+		await screen.findByText("Boire de l'eau");
+
+		expect(screen.getByRole('button', { name: '+ Ajouter' })).toBeInTheDocument();
+
+		const tomorrow = addDays(today, 1);
+		await fireEvent.click(screen.getByRole('button', { name: formatIsoDateLongFr(tomorrow) }));
+		expect(screen.getByRole('button', { name: '+ Ajouter' })).toBeInTheDocument();
+	});
+
+	it('scénario 2 — propose le choix entre habitude et tâche', async () => {
+		render(Page);
+		await screen.findByText("Boire de l'eau");
+
+		await fireEvent.click(screen.getByRole('button', { name: '+ Ajouter' }));
+
+		expect(screen.getByRole('button', { name: 'Nouvelle habitude' })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Nouvelle tâche' })).toBeInTheDocument();
+	});
+
+	it('scénario 3 — crée une tâche pré-remplie à la date affichée, visible immédiatement', async () => {
+		render(Page);
+		await screen.findByText("Boire de l'eau");
+
+		const tomorrow = addDays(today, 1);
+		await fireEvent.click(screen.getByRole('button', { name: formatIsoDateLongFr(tomorrow) }));
+		await fireEvent.click(screen.getByRole('button', { name: '+ Ajouter' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Nouvelle tâche' }));
+
+		expect(screen.getByLabelText('Date')).toHaveValue(tomorrow);
+
+		await fireEvent.input(screen.getByLabelText('Nom'), { target: { value: 'Rappeler le dentiste' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
+
+		expect(await screen.findByText('Rappeler le dentiste')).toBeInTheDocument();
+		// Le formulaire se referme, le bouton d'ajout rapide redevient disponible.
+		expect(screen.getByRole('button', { name: '+ Ajouter' })).toBeInTheDocument();
+	});
+
+	it('scénario 4 — crée une habitude, visible immédiatement si due le jour affiché', async () => {
+		render(Page);
+		await screen.findByText("Boire de l'eau");
+
+		await fireEvent.click(screen.getByRole('button', { name: '+ Ajouter' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Nouvelle habitude' }));
+
+		await fireEvent.input(screen.getByLabelText('Nom'), { target: { value: 'Lire' } });
+		await fireEvent.input(screen.getByLabelText('Emoji'), { target: { value: '📖' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Intervalle en jours' }));
+		await fireEvent.input(screen.getByLabelText('Tous les combien de jours ?'), {
+			target: { value: '1' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
+
+		expect(await screen.findByText('Lire')).toBeInTheDocument();
+	});
+
+	it("scénario 5 — annuler l'ajout rapide ne crée rien et revient au planning", async () => {
+		render(Page);
+		await screen.findByText("Boire de l'eau");
+
+		await fireEvent.click(screen.getByRole('button', { name: '+ Ajouter' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Nouvelle tâche' }));
+		await fireEvent.input(screen.getByLabelText('Nom'), { target: { value: 'Ne pas créer' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+
+		expect(screen.getByRole('button', { name: '+ Ajouter' })).toBeInTheDocument();
+		expect(screen.queryByText('Ne pas créer')).toBeNull();
 	});
 });
 

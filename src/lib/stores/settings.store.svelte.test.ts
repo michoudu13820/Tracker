@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
 import { SettingsStore } from './settings.store.svelte';
-import type { ColorThresholds, ReminderSettings } from '$lib/domain/types';
+import type { ColorThresholds, ReminderSettings, WeeklyReviewSettings } from '$lib/domain/types';
 import { DEFAULT_FONT_CHOICE, type FontChoice } from '$lib/domain/fonts';
 import type { SettingsRepository } from '$lib/data/repositories';
 
@@ -18,14 +18,17 @@ function fakeRepo(): SettingsRepository & {
 	savedReminders: ReminderSettings[];
 	savedThresholds: ColorThresholds[];
 	savedFontChoices: FontChoice[];
+	savedWeeklyReviews: WeeklyReviewSettings[];
 } {
 	const savedReminders: ReminderSettings[] = [];
 	const savedThresholds: ColorThresholds[] = [];
 	const savedFontChoices: FontChoice[] = [];
+	const savedWeeklyReviews: WeeklyReviewSettings[] = [];
 	return {
 		savedReminders,
 		savedThresholds,
 		savedFontChoices,
+		savedWeeklyReviews,
 		async getReminderSettings() {
 			return { enabled: false, time: '08:00', timezone: 'Europe/Paris' };
 		},
@@ -43,6 +46,12 @@ function fakeRepo(): SettingsRepository & {
 		},
 		async saveFontChoice(choice) {
 			savedFontChoices.push(choice);
+		},
+		async getWeeklyReviewSettings() {
+			return { enabled: false, weekday: 0, time: '18:00' };
+		},
+		async saveWeeklyReviewSettings(s) {
+			savedWeeklyReviews.push(structuredClone(s));
 		}
 	};
 }
@@ -71,6 +80,38 @@ describe('SettingsStore (régression BUG-001)', () => {
 
 		expect(repo.savedReminders).toHaveLength(2);
 		expect(repo.savedReminders[1]).toEqual(settings);
+	});
+});
+
+describe('SettingsStore.weeklyReview (US-028)', () => {
+	it('charge les réglages de revue hebdomadaire (indépendants du rappel quotidien)', async () => {
+		const repo = fakeRepo();
+		const store = new SettingsStore(repo);
+
+		await store.load();
+
+		expect(store.weeklyReview).toEqual({ enabled: false, weekday: 0, time: '18:00' });
+	});
+
+	it('enregistre et reflète immédiatement les réglages de revue hebdomadaire', async () => {
+		const repo = fakeRepo();
+		const store = new SettingsStore(repo);
+		const settings: WeeklyReviewSettings = { enabled: true, weekday: 0, time: '18:00' };
+
+		await store.saveWeeklyReview(settings);
+
+		expect(store.weeklyReview).toEqual(settings);
+		expect(repo.savedWeeklyReviews).toEqual([settings]);
+	});
+
+	it('re-sauvegarder les réglages lus depuis le store (Proxy $state) ne provoque pas de DataCloneError', async () => {
+		const repo = fakeRepo();
+		const store = new SettingsStore(repo);
+		await store.saveWeeklyReview({ enabled: true, weekday: 3, time: '19:30' });
+
+		await expect(store.saveWeeklyReview(store.weeklyReview!)).resolves.toBeUndefined();
+
+		expect(repo.savedWeeklyReviews).toHaveLength(2);
 	});
 });
 

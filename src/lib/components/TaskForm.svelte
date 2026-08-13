@@ -1,23 +1,31 @@
 <script lang="ts">
 	/**
-	 * Formulaire de création/édition d'une tâche ponctuelle (US-002). Colocalisé dans la
-	 * route `taches` (utilisé uniquement ici). Validation déléguée à `$lib/domain/tasks`.
+	 * Formulaire de création/édition d'une tâche ponctuelle (US-002). Partagé entre `/taches` et
+	 * l'ajout rapide depuis le planning `/` (US-026) — déplacé dans `$lib/components` dès son
+	 * usage par une 2ᵉ route (voir CONVENTIONS.md §7). Validation déléguée à `$lib/domain/tasks`.
 	 */
 	import type { Task, IsoDate } from '$lib/domain/types';
 	import { validateTaskDraft, type TaskDraft } from '$lib/domain/tasks';
-	import { toIsoDate } from '$lib/domain/dates';
+	import { toIsoDate, roundTimeToQuarterHour } from '$lib/domain/dates';
 
 	interface Props {
 		/** Tâche à éditer, ou `undefined` en création. */
 		task?: Task;
+		/** Date pré-remplie à la création depuis le planning (US-026 scénario 3) — ignorée en
+		 * édition (la date déjà enregistrée de la tâche prévaut toujours). */
+		defaultDate?: IsoDate;
 		onSave: (task: Task) => void;
 		onCancel: () => void;
 	}
 
-	let { task, onSave, onCancel }: Props = $props();
+	let { task, defaultDate, onSave, onCancel }: Props = $props();
 
 	function initialDraft(): TaskDraft {
-		return { name: task?.name ?? '', date: task?.date ?? null };
+		return {
+			name: task?.name ?? '',
+			date: task?.date ?? defaultDate ?? null,
+			dueTime: task?.dueTime ?? null
+		};
 	}
 
 	let draft = $state<TaskDraft>(initialDraft());
@@ -29,17 +37,26 @@
 		errors = result.errors;
 		if (!result.valid) return;
 
+		// Heure limite optionnelle (US-021 scénario 3) : toujours arrondie au quart d'heure,
+		// jamais stockée à la minute près, même si le sélecteur du navigateur l'a permis.
+		const dueTime = draft.dueTime ? roundTimeToQuarterHour(draft.dueTime) : undefined;
+
 		const savedTask: Task = {
 			id: task?.id ?? crypto.randomUUID(),
 			name: draft.name.trim(),
 			date: draft.date as IsoDate,
-			createdAt: task?.createdAt ?? toIsoDate(new Date())
+			createdAt: task?.createdAt ?? toIsoDate(new Date()),
+			...(dueTime ? { dueTime } : {})
 		};
 		onSave(savedTask);
 	}
 </script>
 
-<form onsubmit={submit} aria-label={task ? 'Modifier la tâche' : 'Créer une tâche'}>
+<form
+	onsubmit={submit}
+	aria-label={task ? 'Modifier la tâche' : 'Créer une tâche'}
+	novalidate
+>
 	<div class="field">
 		<label for="task-name">Nom</label>
 		<input
@@ -53,6 +70,11 @@
 	<div class="field">
 		<label for="task-date">Date</label>
 		<input id="task-date" type="date" bind:value={draft.date} />
+	</div>
+
+	<div class="field">
+		<label for="task-due-time">Heure limite (optionnelle)</label>
+		<input id="task-due-time" type="time" step="900" bind:value={draft.dueTime} />
 	</div>
 
 	{#if errors.length > 0}

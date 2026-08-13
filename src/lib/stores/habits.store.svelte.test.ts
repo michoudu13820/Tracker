@@ -88,3 +88,81 @@ describe('HabitsStore.remove / setStatus (US-013 suppression, mécanisme réutil
 		expect(store.habits[0].status).toBe('active');
 	});
 });
+
+describe('HabitsStore — date de reprise automatique (US-027)', () => {
+	it('setResumeAt programme une date de reprise sur une habitude en pause (scénario 3)', async () => {
+		const repo = fakeRepo();
+		const store = new HabitsStore(repo);
+		await store.upsert(habit);
+		await store.setStatus(habit.id, 'paused');
+
+		await store.setResumeAt(habit.id, '2026-09-01');
+
+		expect(store.habits[0].resumeAt).toBe('2026-09-01');
+		expect(store.habits[0].status).toBe('paused');
+	});
+
+	it('setResumeAt ne fait rien si l\'habitude ciblée n\'est pas en pause', async () => {
+		const repo = fakeRepo();
+		const store = new HabitsStore(repo);
+		await store.upsert(habit);
+
+		await store.setResumeAt(habit.id, '2026-09-01');
+
+		expect(store.habits[0].resumeAt).toBeUndefined();
+	});
+
+	it('setResumeAt(undefined) retire la date de reprise (scénario 5)', async () => {
+		const repo = fakeRepo();
+		const store = new HabitsStore(repo);
+		await store.upsert(habit);
+		await store.setStatus(habit.id, 'paused');
+		await store.setResumeAt(habit.id, '2026-09-01');
+
+		await store.setResumeAt(habit.id, undefined);
+
+		expect(store.habits[0].resumeAt).toBeUndefined();
+		expect(store.habits[0].status).toBe('paused');
+	});
+
+	it('setStatus retire toute date de reprise en quittant la pause (réactivation manuelle ou suppression)', async () => {
+		const repo = fakeRepo();
+		const store = new HabitsStore(repo);
+		await store.upsert(habit);
+		await store.setStatus(habit.id, 'paused');
+		await store.setResumeAt(habit.id, '2026-09-01');
+
+		await store.setStatus(habit.id, 'active');
+
+		expect(store.habits[0].resumeAt).toBeUndefined();
+	});
+
+	it('applyAutoResume réactive les habitudes dont la date de reprise est atteinte (scénario 4)', async () => {
+		const repo = fakeRepo();
+		const store = new HabitsStore(repo);
+		const dueHabit = { ...habit, id: 'h2' };
+		await store.upsert(habit);
+		await store.upsert(dueHabit);
+		await store.setStatus(habit.id, 'paused');
+		await store.setStatus(dueHabit.id, 'paused');
+		await store.setResumeAt(habit.id, '2026-09-01'); // pas encore atteinte
+		await store.setResumeAt(dueHabit.id, '2026-08-01'); // déjà atteinte
+
+		await store.applyAutoResume('2026-08-15');
+
+		expect(store.habits.find((h) => h.id === habit.id)?.status).toBe('paused');
+		expect(store.habits.find((h) => h.id === dueHabit.id)?.status).toBe('active');
+		expect(store.habits.find((h) => h.id === dueHabit.id)?.resumeAt).toBeUndefined();
+	});
+
+	it("applyAutoResume ne touche pas une habitude en pause sans date de reprise", async () => {
+		const repo = fakeRepo();
+		const store = new HabitsStore(repo);
+		await store.upsert(habit);
+		await store.setStatus(habit.id, 'paused');
+
+		await store.applyAutoResume('2026-08-15');
+
+		expect(store.habits[0].status).toBe('paused');
+	});
+});

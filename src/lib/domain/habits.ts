@@ -196,6 +196,27 @@ export function visibleHabits(habits: Habit[]): Habit[] {
 	return habits.filter((h) => !isHabitDeleted(h));
 }
 
+/** Habitudes actives uniquement (US-027 scénario 1) — la liste « principale » de l'écran
+ * Habitudes, séparée de la section « En pause / Supprimées ». */
+export function activeHabits(habits: Habit[]): Habit[] {
+	return habits.filter((h) => isHabitActive(h));
+}
+
+/** Habitudes en pause ou supprimées (US-027 scénario 1), regroupées dans une section dédiée
+ * de l'écran Habitudes — distinguées visuellement en scénario 2 via leur statut respectif. */
+export function pausedOrDeletedHabits(habits: Habit[]): Habit[] {
+	return habits.filter((h) => isHabitPaused(h) || isHabitDeleted(h));
+}
+
+/**
+ * Une habitude en pause est due pour une reprise automatique (US-027 scénario 4) : une date de
+ * reprise est programmée et déjà atteinte (`today >= resumeAt`). Ne concerne jamais les
+ * habitudes supprimées (US-013) — pas de restauration automatique pour celles-ci.
+ */
+export function isDueForAutoResume(habit: Habit, today: IsoDate): boolean {
+	return isHabitPaused(habit) && habit.resumeAt !== undefined && habit.resumeAt <= today;
+}
+
 /** Libellé lisible d'une fréquence, pour l'affichage dans la liste des habitudes. */
 export function describeFrequency(frequency: Frequency): string {
 	if (frequency.kind === 'interval') {

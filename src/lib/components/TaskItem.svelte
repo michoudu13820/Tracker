@@ -106,7 +106,11 @@
 		<span class="icon" aria-hidden="true">✅</span>
 		<span class="info">
 			<span class="name" class:done>{task.name}</span>
-			<span class="date">{formatIsoDateFr(task.date)}</span>
+			<span class="date"
+				>{formatIsoDateFr(task.date)}{#if task.dueTime}
+					<span class="due-time">· jusqu'à {task.dueTime}</span>
+				{/if}</span
+			>
 		</span>
 		<span class="badge" data-status={status}>{statusLabel[status]}</span>
 	</label>
@@ -195,6 +199,9 @@
 	.date {
 		font-size: 0.8rem;
 		color: var(--muted);
+	}
+	.due-time {
+		font-weight: 600;
 	}
 	.badge {
 		font-size: 0.7rem;

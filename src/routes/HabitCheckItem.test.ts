@@ -47,3 +47,15 @@ describe('HabitCheckItem — carte horizontale pleine largeur (US-010 scénario 
 		expect(screen.getByText(longName)).toBeInTheDocument();
 	});
 });
+
+describe('HabitCheckItem — signal « manquée hier » (US-025)', () => {
+	it('scénario 1 — affiche le signal quand missedYesterday est vrai', () => {
+		render(HabitCheckItem, { habit, done: false, onToggle: vi.fn(), missedYesterday: true });
+		expect(screen.getByText('manquée hier')).toBeInTheDocument();
+	});
+
+	it("n'affiche aucun signal par défaut (scénarios 2/3)", () => {
+		render(HabitCheckItem, { habit, done: false, onToggle: vi.fn() });
+		expect(screen.queryByText('manquée hier')).toBeNull();
+	});
+});

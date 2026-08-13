@@ -23,9 +23,12 @@
 		onAdd: (amount: number) => void;
 		/** Remplace directement la valeur cumulée du jour (scénario 9 — correction). */
 		onCorrect: (value: number) => void;
+		/** Signal doux « manquée hier » (US-025) — informatif uniquement, aucune action de
+		 * reprogrammation associée. */
+		missedYesterday?: boolean;
 	}
 
-	let { habit, value, done, onAdd, onCorrect }: Props = $props();
+	let { habit, value, done, onAdd, onCorrect, missedYesterday = false }: Props = $props();
 
 	const target = $derived(habit.target as NonNullable<Habit['target']>);
 	const percent = $derived(progressPercent(value, target.value));
@@ -75,6 +78,9 @@
 			<button type="button" class="value" onclick={openCorrect}>
 				{formatTargetNumber(value)} / {describeTarget(target)}
 			</button>
+			{#if missedYesterday}
+				<span class="badge" data-status="missed-yesterday">manquée hier</span>
+			{/if}
 		</div>
 		<button
 			type="button"
@@ -164,6 +170,19 @@
 		font-size: 0.85rem;
 		color: var(--habit-text);
 		text-decoration: underline dotted;
+	}
+	.badge {
+		align-self: flex-start;
+		font-size: 0.7rem;
+		padding: 0.15rem 0.6rem;
+		border-radius: 1rem;
+		white-space: nowrap;
+		font-weight: 600;
+	}
+	.badge[data-status='missed-yesterday'] {
+		color: var(--habit-text);
+		background: var(--surface);
+		border: 1px solid var(--habit-border);
 	}
 	.add-btn {
 		min-width: 44px;

@@ -1,5 +1,5 @@
 import { PUBLIC_VAPID_KEY, PUBLIC_SCHEDULER_URL } from '$env/static/public';
-import type { ScheduledReminder } from '$lib/domain/reminders';
+import type { ScheduledReminder, ScheduledTaskReminder } from '$lib/domain/reminders';
 
 /**
  * Client Web Push — côté navigateur.
@@ -70,17 +70,24 @@ export async function getExistingSubscription(): Promise<PushSubscription | null
 
 /**
  * Envoie au serveur la souscription + la fenêtre de rappels calculée localement.
- * C'est le SEUL appel réseau sortant qui contient des données propres à l'utilisateur —
- * et il ne contient QUE des instants d'envoi, aucune habitude ni historique.
+ * C'est le SEUL appel réseau sortant qui contient des données propres à l'utilisateur.
+ *
+ * `reminders` (récap matinal des habitudes, US-007) et `weeklyReviewReminders` (revue
+ * hebdomadaire poussée, US-028) restent strictement des instants d'envoi, aucune donnée
+ * métier. `taskReminders` (heure limite d'une tâche, US-022) transporte en plus un contenu
+ * nominatif déjà composé (`title`/`body`) — dérogation explicitement circonscrite, documentée
+ * par l'amendement du 2026-08-12 à ADR-001.
  */
 export async function pushSchedule(
 	subscription: PushSubscription,
-	reminders: ScheduledReminder[]
+	reminders: ScheduledReminder[],
+	taskReminders: ScheduledTaskReminder[] = [],
+	weeklyReviewReminders: ScheduledReminder[] = []
 ): Promise<void> {
 	await fetch(`${PUBLIC_SCHEDULER_URL}/register-subscription`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ subscription, reminders })
+		body: JSON.stringify({ subscription, reminders, taskReminders, weeklyReviewReminders })
 	});
 }
 
@@ -104,7 +111,12 @@ export interface PushClient {
 	notificationPermission(): NotificationPermission | 'unsupported';
 	subscribe(): Promise<PushSubscription | null>;
 	getExistingSubscription(): Promise<PushSubscription | null>;
-	pushSchedule(subscription: PushSubscription, reminders: ScheduledReminder[]): Promise<void>;
+	pushSchedule(
+		subscription: PushSubscription,
+		reminders: ScheduledReminder[],
+		taskReminders?: ScheduledTaskReminder[],
+		weeklyReviewReminders?: ScheduledReminder[]
+	): Promise<void>;
 	unsubscribe(subscription: PushSubscription): Promise<void>;
 }
 

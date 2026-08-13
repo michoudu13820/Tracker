@@ -51,6 +51,46 @@
 	color-scheme: light;
 }
 
+/**
+ * Mode sombre (US-029) — respecte automatiquement `prefers-color-scheme` du système (scénarios
+ * 1/3), aucun bouton de bascule manuelle (hors périmètre explicite de l'US). Déclinaison directe
+ * de la palette pastel claire ci-dessus (US-009), même esprit assombri : mêmes noms de variable,
+ * donc AUCUN composant à modifier (toute la charte est déjà centralisée ici, jamais codée en dur
+ * ailleurs — voir US-009/CONVENTIONS.md). `color-scheme: dark` fait aussi basculer le rendu des
+ * contrôles natifs (sélecteurs de date/heure, cases à cocher) vers leur variante sombre.
+ */
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #241a20;
+		--surface: #2e222a;
+		--surface-border: #43323c;
+		--surface-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+
+		--text: #f3e6ee;
+		--muted: #b79aa8;
+
+		--accent: #c9a6e6;
+		--accent-text: #241a30;
+
+		--success-bg: #1f3a28;
+		--success-text: #8fd9a8;
+		--success-border: #2f5940;
+
+		--danger-bg: #3a1f28;
+		--danger-text: #f0a8bc;
+		--danger-border: #5c2f3f;
+
+		--warning-bg: #3a3018;
+		--warning-text: #e8c97a;
+		--warning-border: #5c4a26;
+
+		--habit-border: #c9a6e6;
+		--habit-text: #d8bdf0;
+
+		color-scheme: dark;
+	}
+}
+
 * {
 	box-sizing: border-box;
 }

@@ -11,6 +11,15 @@ source: chat
 depend_de: ["US-001"]
 ---
 
+> **Révision de portée (2026-08-12)** : la règle « le contenu du push ne nomme jamais une
+> habitude/tâche » posée par cette US (et par ADR-001) est **révisée** par
+> [US-022 — Rappel push nominatif à l'heure limite d'une tâche](../done/US-022-rappel-push-nominatif-heure-limite-tache.md),
+> sur décision assumée de l'utilisateur (téléphone personnel). Cette révision ne concerne
+> **que** le nouveau rappel déclenché par l'heure limite d'une tâche ponctuelle (US-021/US-022) :
+> le récap matinal générique des habitudes couvert par cette US-007 (scénarios 1, 2, 3
+> ci-dessous) reste, lui, non nominatif et inchangé. Voir aussi l'amendement du 2026-08-12
+> dans `docs/architecture/ADR-001-pwa-sveltekit-web-push-scheduler.md`.
+
 ## Titre : US-007 — Rappels par notification pour les habitudes du jour
 
 ### Récit

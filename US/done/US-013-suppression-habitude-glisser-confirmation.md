@@ -13,6 +13,14 @@ depend_de: ["US-001", "US-010"]
 
 ## Titre : US-013 — Suppression d'une habitude par glisser + confirmation
 
+> **Révision de portée (US-027)** : le scénario 3 ci-dessous précise qu'une habitude supprimée
+> « n'est plus listée du tout ». [US-027 — Section « En pause / Supprimées »](./US-027-section-pause-supprimees-reprise-automatique.md)
+> révise ce point sur décision produit explicite : une habitude supprimée n'apparaît plus dans la
+> **liste active**, mais devient visible, en lecture seule, dans une nouvelle section dédiée
+> « En pause / Supprimées » de l'écran Habitudes — plutôt que d'être masquée sans trace. Le
+> caractère **irréversible** de la suppression (pas de restauration via l'UI) et son absence du
+> planning/résumé sont inchangés.
+
 ### Récit
 > **En tant qu'** utilisateur de l'app,
 > **je veux** pouvoir supprimer une habitude que je ne souhaite plus suivre, via un geste de glisser sur sa carte suivi d'une confirmation,

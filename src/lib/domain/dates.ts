@@ -145,6 +145,21 @@ export function formatIsoDateLongFr(iso: IsoDate): string {
 }
 
 /**
+ * Arrondit une heure `HH:MM` au quart d'heure le plus proche (US-021 scénario 3) : seules
+ * `:00`, `:15`, `:30`, `:45` sont conservées après arrondi, jamais la minute exacte — la
+ * granularité du scheduler serveur (~15 min, cf. ADR-001) ne promet aucune précision plus
+ * fine. Gère le débordement de fin de journée (ex. `23:53` → `00:00`, pas `24:00`).
+ */
+export function roundTimeToQuarterHour(time: string): string {
+	const [h, m] = time.split(':').map(Number);
+	const totalMinutes = h * 60 + m;
+	const rounded = (Math.round(totalMinutes / 15) * 15) % (24 * 60);
+	const rh = Math.floor(rounded / 60);
+	const rm = rounded % 60;
+	return `${String(rh).padStart(2, '0')}:${String(rm).padStart(2, '0')}`;
+}
+
+/**
  * Titre du planning (US-012) : « Planning d'aujourd'hui » si `selectedDate` est le jour
  * courant (`today`), sinon « Planning du <jour de la semaine> <jour du mois> <mois> » en
  * français (ex. "Planning du mercredi 12 août").

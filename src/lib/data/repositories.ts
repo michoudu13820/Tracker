@@ -7,7 +7,8 @@ import type {
 	ReminderSettings,
 	Task,
 	TaskCompletion,
-	ColorThresholds
+	ColorThresholds,
+	WeeklyReviewSettings
 } from '$lib/domain/types';
 import { DEFAULT_THRESHOLDS } from '$lib/domain/summary';
 import { DEFAULT_FONT_CHOICE, type FontChoice } from '$lib/domain/fonts';
@@ -50,6 +51,9 @@ export interface SettingsRepository {
 	 * seuils de couleur et les rappels, comme demandé par la dépendance de l'US. */
 	getFontChoice(): Promise<FontChoice>;
 	saveFontChoice(choice: FontChoice): Promise<void>;
+	/** Réglages de la revue hebdomadaire poussée (US-028), indépendants du rappel quotidien. */
+	getWeeklyReviewSettings(): Promise<WeeklyReviewSettings>;
+	saveWeeklyReviewSettings(s: WeeklyReviewSettings): Promise<void>;
 }
 
 const KEYS = {
@@ -60,7 +64,8 @@ const KEYS = {
 	habitProgress: 'habit-progress',
 	reminder: 'reminder-settings',
 	thresholds: 'color-thresholds',
-	font: 'font-choice'
+	font: 'font-choice',
+	weeklyReview: 'weekly-review-settings'
 } as const;
 
 function defaultReminder(): ReminderSettings {
@@ -69,6 +74,12 @@ function defaultReminder(): ReminderSettings {
 		time: '08:00',
 		timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris'
 	};
+}
+
+/** Dimanche 18h00 par défaut (US-028), désactivée tant que l'utilisateur ne l'active pas
+ * explicitement — même principe que `defaultReminder`. */
+function defaultWeeklyReview(): WeeklyReviewSettings {
+	return { enabled: false, weekday: 0, time: '18:00' };
 }
 
 /** Implémentation IndexedDB (seul endroit qui connaît la source de données). */
@@ -130,6 +141,12 @@ export const idbRepositories = {
 		},
 		async saveFontChoice(choice: FontChoice) {
 			await set(KEYS.font, choice);
+		},
+		async getWeeklyReviewSettings() {
+			return (await get<WeeklyReviewSettings>(KEYS.weeklyReview)) ?? defaultWeeklyReview();
+		},
+		async saveWeeklyReviewSettings(s: WeeklyReviewSettings) {
+			await set(KEYS.weeklyReview, s);
 		}
 	} satisfies SettingsRepository
 };

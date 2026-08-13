@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { RemindersStore } from './reminders.store.svelte';
 import type { PushClient } from '$lib/push/client';
 import { toIsoDate } from '$lib/domain/dates';
-import type { Habit, HabitCompletion, ReminderSettings } from '$lib/domain/types';
+import type { Habit, HabitCompletion, ReminderSettings, Task, WeeklyReviewSettings } from '$lib/domain/types';
 
 /**
  * Tests de `RemindersStore` (US-007) — le client push (`$lib/push/client`) est injecté
@@ -14,10 +14,20 @@ function fakeSubscription(endpoint = 'https://push.example/abc'): PushSubscripti
 }
 
 function fakeClient(overrides: Partial<PushClient> = {}): PushClient & {
-	scheduled: Array<{ endpoint: string; reminders: unknown[] }>;
+	scheduled: Array<{
+		endpoint: string;
+		reminders: unknown[];
+		taskReminders: unknown[];
+		weeklyReviewReminders: unknown[];
+	}>;
 	unsubscribed: string[];
 } {
-	const scheduled: Array<{ endpoint: string; reminders: unknown[] }> = [];
+	const scheduled: Array<{
+		endpoint: string;
+		reminders: unknown[];
+		taskReminders: unknown[];
+		weeklyReviewReminders: unknown[];
+	}> = [];
 	const unsubscribed: string[] = [];
 	return {
 		scheduled,
@@ -27,8 +37,8 @@ function fakeClient(overrides: Partial<PushClient> = {}): PushClient & {
 		notificationPermission: () => 'default',
 		subscribe: vi.fn(async () => fakeSubscription()),
 		getExistingSubscription: vi.fn(async () => null),
-		pushSchedule: vi.fn(async (subscription, reminders) => {
-			scheduled.push({ endpoint: subscription.endpoint, reminders });
+		pushSchedule: vi.fn(async (subscription, reminders, taskReminders = [], weeklyReviewReminders = []) => {
+			scheduled.push({ endpoint: subscription.endpoint, reminders, taskReminders, weeklyReviewReminders });
 		}),
 		unsubscribe: vi.fn(async (subscription) => {
 			unsubscribed.push(subscription.endpoint);
@@ -181,5 +191,80 @@ describe('RemindersStore.restore (US-007 scénario 9, reprise au démarrage)', (
 
 		expect(store.subscription).toBeNull();
 		expect(client.getExistingSubscription).not.toHaveBeenCalled();
+	});
+});
+
+describe('RemindersStore — rappels nominatifs des tâches à heure limite (US-022)', () => {
+	const task: Task = {
+		id: 't1',
+		name: 'Payer facture EDF',
+		date: toIsoDate(new Date()),
+		createdAt: '2026-08-01',
+		dueTime: '23:45'
+	};
+
+	it('scénario 1 — pousse la fenêtre de tâches nominative en même temps que le récap habitudes', async () => {
+		const client = fakeClient();
+		const store = new RemindersStore(client);
+
+		await store.enable([habit], settingsEnabled, [], [task]);
+
+		const last = client.scheduled.at(-1);
+		expect(last?.taskReminders).toHaveLength(1);
+		expect((last?.taskReminders[0] as { body: string }).body).toContain('Payer facture EDF');
+	});
+
+	it("scénario 3 — aucune entrée de tâche si aucune tâche n'a d'heure limite", async () => {
+		const client = fakeClient();
+		const store = new RemindersStore(client);
+		const noTime: Task = { ...task, dueTime: undefined };
+
+		await store.enable([habit], settingsEnabled, [], [noTime]);
+
+		expect(client.scheduled.at(-1)?.taskReminders).toEqual([]);
+	});
+
+	it('scénario 6 — aucun rappel de tâche si les rappels sont désactivés globalement', async () => {
+		const client = fakeClient();
+		const store = new RemindersStore(client);
+		await store.enable([habit], settingsEnabled, [], [task]);
+
+		await store.sync([habit], { ...settingsEnabled, enabled: false }, [], [task]);
+
+		// `sync` est un no-op quand `enabled` est faux (même comportement que le canal habitudes) :
+		// la dernière fenêtre poussée reste celle de l'activation initiale.
+		expect(client.scheduled).toHaveLength(1);
+	});
+});
+
+describe('RemindersStore — revue hebdomadaire poussée (US-028)', () => {
+	const weeklyReviewEnabled: WeeklyReviewSettings = { enabled: true, weekday: 0, time: '18:00' };
+
+	it('scénario 1 — pousse la fenêtre de revue hebdomadaire en même temps que le récap habitudes', async () => {
+		const client = fakeClient();
+		const store = new RemindersStore(client);
+
+		await store.enable([habit], settingsEnabled, [], [], [], weeklyReviewEnabled);
+
+		const last = client.scheduled.at(-1);
+		expect((last?.weeklyReviewReminders as unknown[]).length).toBeGreaterThan(0);
+	});
+
+	it('scénario 3 — aucune entrée de revue hebdomadaire si son propre réglage est désactivé, même si le rappel quotidien est actif', async () => {
+		const client = fakeClient();
+		const store = new RemindersStore(client);
+
+		await store.enable([habit], settingsEnabled, [], [], [], { ...weeklyReviewEnabled, enabled: false });
+
+		expect(client.scheduled.at(-1)?.weeklyReviewReminders).toEqual([]);
+	});
+
+	it("n'ajoute aucune entrée si aucun réglage de revue hebdomadaire n'est fourni", async () => {
+		const client = fakeClient();
+		const store = new RemindersStore(client);
+
+		await store.enable([habit], settingsEnabled);
+
+		expect(client.scheduled.at(-1)?.weeklyReviewReminders).toEqual([]);
 	});
 });
