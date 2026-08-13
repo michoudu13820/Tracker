@@ -27,12 +27,14 @@ jobs:
       PUBLIC_SCHEDULER_URL: '/.netlify/functions'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
+      # Node 24: current Active LTS (support until 2028-04-30). Node 20 reached end-of-life
+      # on 2026-04-30 — kept in sync with `netlify.toml`'s NODE_VERSION (see deploy job below).
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -64,12 +66,17 @@ jobs:
       NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
+      # Node 24: this job runs the REAL production build (`netlify deploy` invokes `npm run
+      # build` itself, see below) — must match `netlify.toml`'s NODE_VERSION exactly, since that
+      # is the only "Netlify build environment" actually in play here (no hosted Netlify build
+      # is configured; see docs/architecture/ADR-001). Also matches `build-and-test` above so
+      # the quality-gate build and the deployed build run under the same Node major.
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       # Installs this app's own dependencies only (needed for `npm run build` and for Netlify

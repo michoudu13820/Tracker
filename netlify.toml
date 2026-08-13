@@ -8,7 +8,9 @@
   functions = "netlify/functions"
 
 [build.environment]
-  NODE_VERSION = "20"
+  # Node 20 reached end-of-life on 2026-04-30. Kept in sync with `node-version` in
+  # .github/workflows/ci.yml (the actual production build runs there, via `netlify deploy`).
+  NODE_VERSION = "24"
 
 # La planification de `send-reminders` est déclarée dans le fichier de la fonction
 # (export `config.schedule`). Elle peut aussi être surchargée ici si besoin :
