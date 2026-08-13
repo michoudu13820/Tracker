@@ -50,3 +50,52 @@ jobs:
 
       - name: Build (adapter-static)
         run: npm run build
+
+  deploy:
+    name: Deploy to Netlify (production)
+    needs: build-and-test
+    # Only ever deploy from `main`: on a real push, or on a manual re-run (e.g. to redeploy
+    # after rotating a secret, without needing an empty commit). PRs never reach this job.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Installs this app's own dependencies only (needed for `npm run build` and for Netlify
+      # to bundle the Functions' imports, e.g. @netlify/blobs, web-push). netlify-cli itself is
+      # NOT added to package.json on purpose: it's a heavyweight CLI (1000+ transitive packages)
+      # only needed by this deploy step — keeping it out of package.json keeps `npm ci` fast for
+      # every other job/contributor and avoids dragging its dependency tree into local dev.
+      - name: Install dependencies
+        run: npm ci
+
+      # `netlify deploy` runs `npm run build` itself (per netlify.toml) using the REAL
+      # PUBLIC_VAPID_KEY / PUBLIC_SCHEDULER_URL already configured as Netlify environment
+      # variables for this site — deliberately NOT the placeholders from the `build-and-test`
+      # job above (that build only proves the app compiles; its output is never deployed).
+      # `netlify.toml` already declares publish = "build" and functions = "netlify/functions",
+      # so a single `--prod` deploy ships the static site (incl. the generated service worker)
+      # AND the Netlify Functions together. Version pinned for reproducibility (bump deliberately).
+      # Guard: until NETLIFY_AUTH_TOKEN is set as a repository secret, skip the deploy with a
+      # warning instead of failing. Without this the whole CI would go red on every push for a
+      # missing credential, which says nothing about the health of the code. Note the check has
+      # to live inside the step: the `secrets` context is not available in a job- or step-level
+      # `if:` condition, only through `env:` (set at job level above).
+      - name: Build & deploy to Netlify (site + functions)
+        run: |
+          if [ -z "$NETLIFY_AUTH_TOKEN" ]; then
+            echo "::warning title=Déploiement ignoré::NETLIFY_AUTH_TOKEN n'est pas défini dans les secrets du dépôt. Le code est validé mais rien n'a été déployé. Voir README / gh secret set NETLIFY_AUTH_TOKEN."
+            exit 0
+          fi
+          npx --yes netlify-cli@27.1.1 deploy --prod --context production
