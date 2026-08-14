@@ -8,7 +8,8 @@
 	 * Partagé entre ≥ 2 routes → placé dans `lib/components` (voir CONVENTIONS.md §7).
 	 */
 	import type { IsoDate, Task } from '$lib/domain/types';
-	import { taskStatus, validateReschedule } from '$lib/domain/tasks';
+	import { isTaskUrgent, taskStatus, validateReschedule } from '$lib/domain/tasks';
+	import { cardColorStyle, resolveCardColor } from '$lib/domain/card-colors';
 	import { formatIsoDateFr } from '$lib/domain/dates';
 	import { SwipeToDelete, ConfirmDialog } from '$lib/components';
 
@@ -46,6 +47,14 @@
 	}: Props = $props();
 
 	const status = $derived(taskStatus(task, done, today));
+
+	/** Teinte de carte choisie (US-037 scénario 2 : rendu identique sur `/taches` et le planning).
+	 * Repère personnel : elle ne porte jamais le statut, qui reste au badge (scénario 8). */
+	const cardColor = $derived(resolveCardColor(task.color));
+
+	/** Marquage d'urgence (US-039) : signal dédié, en plus du badge de statut et de l'icône ✅ de
+	 * type — jamais à leur place (scénario 8). */
+	const urgent = $derived(isTaskUrgent(task));
 
 	let reprogramOpen = $state(false);
 	let newDate = $state<IsoDate | null>(null);
@@ -112,11 +121,23 @@
 				{/if}</span
 			>
 		</span>
-		<span class="badge" data-status={status}>{statusLabel[status]}</span>
+		<span class="badges">
+			{#if urgent}
+				<!-- Le glyphe est décoratif (`aria-hidden`) : c'est le mot « Urgente » qui porte
+				     l'information, à l'écran comme au lecteur d'écran (scénario 7). -->
+				<span class="badge urgent"><span aria-hidden="true">‼️</span> Urgente</span>
+			{/if}
+			<span class="badge" data-status={status}>{statusLabel[status]}</span>
+		</span>
 	</label>
 {/snippet}
 
-<li class="task-item" data-status={status}>
+<li
+	class="task-item"
+	data-status={status}
+	data-card-color={cardColor}
+	style={cardColorStyle(task.color)}
+>
 	{#if onDelete}
 		<SwipeToDelete
 			{revealed}
@@ -164,10 +185,13 @@
 {/if}
 
 <style>
+	/* Teinte de carte (US-037) : même palette et mêmes variables que les cartes d'habitude
+	   (US-036). Le badge de statut, le texte barré et l'icône ✅ de type ne sont jamais teintés
+	   — ce sont eux qui portent l'information (scénarios 8/9/11). */
 	.task-item {
-		background: var(--surface);
+		background: var(--card-tint, var(--surface));
 		border: 1px solid var(--surface-border);
-		border-left: 4px solid var(--accent);
+		border-left: 4px solid var(--card-accent, var(--accent));
 		border-radius: var(--card-radius);
 		box-shadow: var(--surface-shadow);
 		padding: var(--card-padding);
@@ -203,12 +227,31 @@
 	.due-time {
 		font-weight: 600;
 	}
+	/* Les badges s'empilent verticalement si la carte devient étroite (nom long + heure limite +
+	   urgence + statut) : la mise en page ne casse jamais (US-039 scénario 8 / US-010). */
+	.badges {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 0.25rem;
+		flex: none;
+	}
 	.badge {
 		font-size: 0.7rem;
 		padding: 0.15rem 0.6rem;
 		border-radius: 1rem;
 		white-space: nowrap;
 		font-weight: 600;
+	}
+	/* Urgence (US-039) : ambre `--warning-*`, volontairement DISTINCT de `--danger-*` déjà porteur
+	   du statut « En retard » — les deux badges peuvent coexister sur la même carte et ne doivent
+	   pas se confondre. L'ambre n'entre en collision avec aucun autre badge de carte de tâche
+	   (« En pause » est propre aux habitudes). L'information reste portée par le mot, pas par la
+	   teinte : en niveaux de gris, le glyphe ‼️ et le libellé restent lisibles. */
+	.badge.urgent {
+		color: var(--warning-text);
+		background: var(--warning-bg);
+		border: 1px solid var(--warning-border);
 	}
 	.badge[data-status='done'] {
 		color: var(--success-text);

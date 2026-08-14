@@ -14,7 +14,10 @@ import {
 	isHabitActive,
 	isHabitDeleted,
 	isHabitPaused,
+	isValidMonthDay,
+	MONTH_DAY_ORDER,
 	pausedOrDeletedHabits,
+	sortedUniqueMonthDays,
 	targetToDraft,
 	TARGET_UNITS,
 	targetUnitLabel,
@@ -112,7 +115,8 @@ describe('frequencyToDraft (édition — US-001 scénario 6)', () => {
 		expect(frequencyToDraft({ kind: 'weekdays', weekdays: [1, 3, 5] })).toEqual({
 			frequencyMode: 'weekdays',
 			intervalDays: null,
-			weekdays: [1, 3, 5]
+			weekdays: [1, 3, 5],
+			monthdays: []
 		});
 	});
 
@@ -120,7 +124,8 @@ describe('frequencyToDraft (édition — US-001 scénario 6)', () => {
 		expect(frequencyToDraft({ kind: 'interval', days: 4, anchor: '2026-01-01' })).toEqual({
 			frequencyMode: 'interval',
 			intervalDays: 4,
-			weekdays: []
+			weekdays: [],
+			monthdays: []
 		});
 	});
 });
@@ -207,6 +212,88 @@ describe('describeFrequency', () => {
 		expect(describeFrequency({ kind: 'weekdays', weekdays: [5, 1, 3] })).toBe(
 			'lundi, mercredi, vendredi'
 		);
+	});
+});
+
+describe('Fréquence « jours du mois » — brouillon et libellé (US-032)', () => {
+	it('scénario 5 — bloque la validation sans aucun jour du mois sélectionné', () => {
+		const draft: HabitDraft = {
+			...emptyHabitDraft(),
+			name: 'Sauvegarde',
+			frequencyMode: 'monthdays'
+		};
+		const result = validateHabitDraft(draft);
+		expect(result.valid).toBe(false);
+		expect(result.errors).toContain('Sélectionnez au moins un jour du mois.');
+	});
+
+	it('scénario 1 — valide un brouillon avec un seul jour du mois', () => {
+		const draft: HabitDraft = {
+			...emptyHabitDraft(),
+			name: 'Relevé de compteur',
+			emoji: '📊',
+			frequencyMode: 'monthdays',
+			monthdays: [1]
+		};
+		expect(validateHabitDraft(draft)).toEqual({ valid: true, errors: [] });
+		expect(draftToFrequency(draft, '2026-08-14')).toEqual({ kind: 'monthdays', monthdays: [1] });
+	});
+
+	it("scénario 4 — construit une fréquence 'monthdays' sans trace des autres modes", () => {
+		const draft: HabitDraft = {
+			...emptyHabitDraft(),
+			name: 'Sauvegarde',
+			frequencyMode: 'monthdays',
+			intervalDays: 5,
+			weekdays: [1, 2],
+			monthdays: [15, 1]
+		};
+		expect(draftToFrequency(draft, '2026-08-14')).toEqual({
+			kind: 'monthdays',
+			monthdays: [1, 15]
+		});
+	});
+
+	it('scénario 2 — normalise la sélection en ordre croissant, sans doublon', () => {
+		expect(sortedUniqueMonthDays([15, 1, 15, 31])).toEqual([1, 15, 31]);
+	});
+
+	it('scénario 3 — n’accepte aucune valeur hors de l’intervalle 1–31', () => {
+		expect(MONTH_DAY_ORDER).toHaveLength(31);
+		expect(MONTH_DAY_ORDER.at(0)).toBe(1);
+		expect(MONTH_DAY_ORDER.at(-1)).toBe(31);
+		expect(isValidMonthDay(0)).toBe(false);
+		expect(isValidMonthDay(32)).toBe(false);
+		expect(isValidMonthDay(1)).toBe(true);
+		expect(isValidMonthDay(31)).toBe(true);
+		expect(sortedUniqueMonthDays([0, 5, 32, 1.5])).toEqual([5]);
+	});
+
+	it('scénario 1 — libellé lisible d’un seul jour du mois', () => {
+		expect(describeFrequency({ kind: 'monthdays', monthdays: [1] })).toBe(
+			'Le 1er de chaque mois'
+		);
+		expect(describeFrequency({ kind: 'monthdays', monthdays: [15] })).toBe(
+			'Le 15 de chaque mois'
+		);
+	});
+
+	it('scénario 2 — libellé lisible de plusieurs jours, toujours en ordre croissant', () => {
+		expect(describeFrequency({ kind: 'monthdays', monthdays: [15, 1] })).toBe(
+			'Les 1er et 15 de chaque mois'
+		);
+		expect(describeFrequency({ kind: 'monthdays', monthdays: [28, 15, 3] })).toBe(
+			'Les 3, 15 et 28 de chaque mois'
+		);
+	});
+
+	it('scénario 10 — rouvre le brouillon d’édition sur le mode « jours du mois » pré-sélectionné', () => {
+		expect(frequencyToDraft({ kind: 'monthdays', monthdays: [15, 1] })).toEqual({
+			frequencyMode: 'monthdays',
+			intervalDays: null,
+			weekdays: [],
+			monthdays: [1, 15]
+		});
 	});
 });
 

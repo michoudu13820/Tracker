@@ -125,9 +125,11 @@ describe('Résumé — compatibilité habitude à cible chiffrée (US-019, inté
 		await screen.findByText('1,5 / 1,5 L');
 		unmount();
 
-		// Étape 2 : le résumé (US-005/US-019) doit refléter ce jour comme « fait », en binaire.
+		// Étape 2 : le résumé (US-005/US-019) doit refléter ce jour comme « fait », en binaire —
+		// avec le symbole et le libellé accessible du langage à trois états (US-035).
 		render(Page);
-		const cell = await screen.findByLabelText(new RegExp(`${targetHabit.name} — .* — done`));
+		const cell = await screen.findByLabelText(new RegExp(`${targetHabit.name} — .* — fait$`));
+		expect(cell).toHaveTextContent('✅');
 		expect(within(cell.closest('table') as HTMLElement).queryByText(/%/)).toBeNull();
 	});
 });

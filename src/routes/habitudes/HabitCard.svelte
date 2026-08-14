@@ -11,6 +11,7 @@
 	 * 3/5). Colocalisé : usage unique dans cette route (voir CONVENTIONS.md §7).
 	 */
 	import type { Habit, HabitCompletion, IsoDate } from '$lib/domain/types';
+	import { cardColorStyle, resolveCardColor } from '$lib/domain/card-colors';
 	import { describeFrequency, describeTarget, habitStatus } from '$lib/domain/habits';
 	import { last7DaysRegularity, missedYesterday, monthlyCompletionCount } from '$lib/domain/regularity';
 	import { weekdayShortLabelFr, formatIsoDateFr } from '$lib/domain/dates';
@@ -53,6 +54,9 @@
 		completions,
 		today
 	}: Props = $props();
+
+	/** Teinte de carte choisie (US-036 scénario 2 : identique ici et dans le planning). */
+	const cardColor = $derived(resolveCardColor(habit.color));
 
 	const status = $derived(habitStatus(habit));
 	const paused = $derived(status === 'paused');
@@ -112,7 +116,7 @@
 	}
 </script>
 
-<li class="habit-card-item">
+<li class="habit-card-item" data-card-color={cardColor} style={cardColorStyle(habit.color)}>
 	{#if deleted}
 		<div class="habit-row deleted-row">
 			<span class="emoji" aria-hidden="true">{habit.emoji}</span>
@@ -216,9 +220,11 @@
 		width: 100%;
 		min-height: 44px;
 		padding: var(--card-padding);
-		background: var(--surface);
+		/* Teinte de carte (US-036) : fond légèrement teinté + liseré. Les badges de statut, les
+		   pastilles de régularité et le compteur mensuel gardent leurs propres couleurs. */
+		background: var(--card-tint, var(--surface));
 		border: 1px solid var(--surface-border);
-		border-left: 4px solid var(--habit-border);
+		border-left: 4px solid var(--card-accent, var(--habit-border));
 		border-radius: var(--card-radius);
 		box-shadow: var(--surface-shadow);
 		color: var(--text);

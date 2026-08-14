@@ -24,6 +24,9 @@
 
 	let period = $state<SummaryPeriod>('week');
 	let reference = $state<IsoDate>(toIsoDate(new Date()));
+	/** Jour courant réel, figé au montage : sert à distinguer la colonne du jour (US-034
+	 * scénario 3) — la navigation change `reference`, jamais « aujourd'hui ». */
+	const today = toIsoDate(new Date());
 
 	onMount(() => {
 		void habitsStore.load();
@@ -95,6 +98,8 @@
 {:else}
 	<WeekMonthTable
 		{dates}
+		{today}
+		period={period === 'month' ? 'month' : 'week'}
 		habits={habitsStore.habits}
 		habitCompletions={completionsStore.habitCompletions}
 		tasks={tasksStore.tasks}

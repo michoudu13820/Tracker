@@ -136,6 +136,68 @@ describe('HabitsStore — date de reprise automatique (US-027)', () => {
 
 		expect(store.habits[0].resumeAt).toBeUndefined();
 	});
+});
+
+/**
+ * US-032 scénario 11 — rétro-compatibilité stricte de la persistance existante : l'ajout du
+ * variant `monthdays` ne doit ni convertir, ni réécrire, ni enrichir les habitudes déjà
+ * enregistrées avec une fréquence `interval` / `weekdays`. Il n'existe volontairement AUCUN
+ * code de migration : ce test verrouille cette absence (une future migration ferait échouer
+ * l'égalité stricte ci-dessous).
+ */
+describe('HabitsStore — rétro-compatibilité des habitudes déjà persistées (US-032 scénario 11)', () => {
+	const legacyInterval: Habit = {
+		id: 'legacy-1',
+		name: 'Marcher',
+		emoji: '🚶',
+		frequency: { kind: 'interval', days: 2, anchor: '2026-01-01' },
+		createdAt: '2026-01-01'
+	};
+	const legacyWeekdays: Habit = {
+		id: 'legacy-2',
+		name: 'Yoga',
+		emoji: '🧘',
+		frequency: { kind: 'weekdays', weekdays: [1, 3, 5] },
+		createdAt: '2026-01-01'
+	};
+
+	function repoWith(habits: Habit[]): HabitsRepository & { saved: Habit[][] } {
+		const repo = fakeRepo();
+		return { ...repo, getAll: async () => structuredClone(habits) };
+	}
+
+	it('relit les habitudes existantes à l’identique, sans conversion ni champ ajouté', async () => {
+		const store = new HabitsStore(repoWith([legacyInterval, legacyWeekdays]));
+
+		await store.load();
+
+		expect(store.habits).toEqual([legacyInterval, legacyWeekdays]);
+		expect(store.habits[0].frequency).toEqual({
+			kind: 'interval',
+			days: 2,
+			anchor: '2026-01-01'
+		});
+		expect(store.habits[1].frequency).toEqual({ kind: 'weekdays', weekdays: [1, 3, 5] });
+	});
+
+	it('conserve leur comportement d’occurrence inchangé', async () => {
+		const store = new HabitsStore(repoWith([legacyInterval, legacyWeekdays]));
+		await store.load();
+
+		// 2026-01-03 = samedi, +2 jours après l'ancrage : intervalle dû, weekdays non dû.
+		expect(store.dueOn('2026-01-03').map((h) => h.id)).toEqual(['legacy-1']);
+		// 2026-01-05 = lundi, +4 jours après l'ancrage : les deux sont dues.
+		expect(store.dueOn('2026-01-05').map((h) => h.id)).toEqual(['legacy-1', 'legacy-2']);
+	});
+
+	it('ne réécrit pas le stockage au simple chargement (aucune migration au démarrage)', async () => {
+		const repo = repoWith([legacyInterval, legacyWeekdays]);
+		const store = new HabitsStore(repo);
+
+		await store.load();
+
+		expect(repo.saved).toHaveLength(0);
+	});
 
 	it('applyAutoResume réactive les habitudes dont la date de reprise est atteinte (scénario 4)', async () => {
 		const repo = fakeRepo();
@@ -164,5 +226,57 @@ describe('HabitsStore — date de reprise automatique (US-027)', () => {
 		await store.applyAutoResume('2026-08-15');
 
 		expect(store.habits[0].status).toBe('paused');
+	});
+});
+
+/**
+ * US-036 scénario 4 — rétro-compatibilité stricte de l'ajout du champ optionnel `color`, sur le
+ * même patron de vérification que la fréquence `monthdays` (US-032 scénario 11) : aucune
+ * migration, aucune réécriture, aucun champ ajouté aux habitudes déjà persistées.
+ */
+describe('HabitsStore — rétro-compatibilité de la couleur de carte (US-036 scénario 4)', () => {
+	const legacy: Habit = {
+		id: 'legacy-1',
+		name: 'Yoga',
+		emoji: '🧘',
+		frequency: { kind: 'weekdays', weekdays: [1, 3, 5] },
+		createdAt: '2026-01-01',
+		status: 'paused',
+		resumeAt: '2026-09-01',
+		target: { value: 1.5, unit: 'L' }
+	};
+
+	function repoWith(habits: Habit[]): HabitsRepository & { saved: Habit[][] } {
+		const repo = fakeRepo();
+		return { ...repo, getAll: async () => structuredClone(habits) };
+	}
+
+	it('relit une habitude sans couleur à l’identique, sans lui ajouter de champ', async () => {
+		const store = new HabitsStore(repoWith([legacy]));
+
+		await store.load();
+
+		expect(store.habits).toEqual([legacy]);
+		expect(store.habits[0].color).toBeUndefined();
+		expect(Object.keys(store.habits[0])).not.toContain('color');
+	});
+
+	it('ne réécrit pas le stockage au chargement (aucune migration au démarrage)', async () => {
+		const repo = repoWith([legacy]);
+		const store = new HabitsStore(repo);
+
+		await store.load();
+
+		expect(repo.saved).toHaveLength(0);
+	});
+
+	it('conserve toutes les autres données quand une couleur est ajoutée plus tard', async () => {
+		const repo = repoWith([legacy]);
+		const store = new HabitsStore(repo);
+		await store.load();
+
+		await store.upsert({ ...store.habits[0], color: 'menthe' });
+
+		expect(store.habits[0]).toEqual({ ...legacy, color: 'menthe' });
 	});
 });

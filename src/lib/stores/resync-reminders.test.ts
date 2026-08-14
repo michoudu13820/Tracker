@@ -86,6 +86,30 @@ describe('resyncReminders (US-023)', () => {
 		expect(sync).toHaveBeenCalledTimes(1);
 	});
 
+	it('US-033 scénario 7 — resynchronise à l’identique pour une habitude à fréquence « jours du mois »', async () => {
+		// Aucun cas particulier : `resyncReminders` transmet les habitudes telles quelles, quel
+		// que soit leur mode de fréquence — la sélection des jours dus reste faite en aval par
+		// `isDueOn`. La limite best-effort d'ADR-001/US-023 scénario 3 est donc inchangée.
+		const monthly: Habit = {
+			id: 'hm',
+			name: 'Sauvegarde',
+			emoji: '💾',
+			createdAt: '2026-08-01',
+			frequency: { kind: 'monthdays', monthdays: [1, 15] }
+		};
+		settingsStore.reminder = settings;
+		habitsStore.habits = [monthly];
+		const habitCompletions: HabitCompletion[] = [
+			{ habitId: monthly.id, date: '2026-08-15', done: true }
+		];
+		completionsStore.habitCompletions = habitCompletions;
+
+		const sync = vi.spyOn(remindersStore, 'sync').mockResolvedValue();
+		await resyncReminders();
+
+		expect(sync).toHaveBeenCalledWith([monthly], settings, habitCompletions, [], [], undefined);
+	});
+
 	it('transmet également les réglages de revue hebdomadaire (US-028) quand ils sont chargés', async () => {
 		const weeklyReview: WeeklyReviewSettings = { enabled: true, weekday: 0, time: '18:00' };
 		settingsStore.reminder = settings;

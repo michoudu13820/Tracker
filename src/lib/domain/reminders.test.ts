@@ -87,6 +87,55 @@ describe('computeReminderWindow', () => {
 	});
 });
 
+/**
+ * US-033 scénario 6 — le récap matinal (US-007) doit compter une habitude « jours du mois »
+ * (US-032) comme due les seuls jours où elle l'est réellement, replis compris. Aucune règle
+ * d'US-007 n'est modifiée : la limite best-effort (ADR-001) reste inchangée.
+ */
+describe('computeReminderWindow et fréquence « jours du mois » (US-033)', () => {
+	const monthly: Habit = {
+		id: 'hm',
+		name: 'Sauvegarde',
+		emoji: '💾',
+		createdAt: '2026-08-01',
+		frequency: { kind: 'monthdays', monthdays: [1] }
+	};
+
+	it('scénario 6 — programme un rappel le 1 du mois, et aucun les autres jours', () => {
+		const now = new Date(2026, 7, 25, 6, 0, 0); // 25 août 2026, 06:00
+		const window = computeReminderWindow([monthly], settings, 15, now);
+		expect(window.map((r) => r.date)).toEqual(['2026-09-01']);
+	});
+
+	it('scénario 6 — aucune occurrence sur une fenêtre qui ne contient aucun jour dû', () => {
+		const now = new Date(2026, 7, 5, 6, 0, 0); // du 5 au 9 août : pas de 1er
+		expect(computeReminderWindow([monthly], settings, 5, now)).toEqual([]);
+	});
+
+	it('scénario 6 — le repli fin de mois déclenche bien un rappel le dernier jour du mois', () => {
+		const lastDay: Habit = {
+			...monthly,
+			id: 'hm2',
+			frequency: { kind: 'monthdays', monthdays: [31] }
+		};
+		const now = new Date(2026, 3, 25, 6, 0, 0); // 25 avril 2026 (avril = 30 jours)
+		const window = computeReminderWindow([lastDay], settings, 6, now);
+		expect(window.map((r) => r.date)).toEqual(['2026-04-30']);
+	});
+
+	it('scénario 6 — best-effort inchangé : une occurrence mensuelle déjà cochée n’est plus rappelée', () => {
+		const now = new Date(2026, 8, 1, 6, 0, 0); // 1er septembre 2026, 06:00
+		const completions: HabitCompletion[] = [{ habitId: 'hm', date: '2026-09-01', done: true }];
+		expect(computeReminderWindow([monthly], settings, 1, now, completions)).toEqual([]);
+	});
+
+	it('scénario 6 — une habitude mensuelle en pause ne déclenche aucun rappel', () => {
+		const now = new Date(2026, 7, 25, 6, 0, 0);
+		const paused: Habit = { ...monthly, id: 'hm3', status: 'paused' };
+		expect(computeReminderWindow([paused], settings, 15, now)).toEqual([]);
+	});
+});
+
 describe('computeTaskReminderWindow (US-022)', () => {
 	const now = new Date(2026, 7, 10, 6, 0, 0); // 2026-08-10 06:00
 
@@ -130,6 +179,42 @@ describe('computeTaskReminderWindow (US-022)', () => {
 		const noTime: Task = { ...edf, dueTime: undefined };
 		const window = computeTaskReminderWindow([noTime], settings, 30, now);
 		expect(window).toEqual([]);
+	});
+
+	/**
+	 * US-037 scénario 13 : la couleur de carte ne doit modifier ni le contenu du push, ni les
+	 * données transmises au micro-scheduler (frontière ADR-001, dont la dérogation reste
+	 * strictement limitée au libellé de la tâche).
+	 */
+	it('scénario 13 (US-037) — la couleur ne change rien au push ni aux données transmises', () => {
+		const reference = computeTaskReminderWindow([edf], settings, 30, now);
+
+		const window = computeTaskReminderWindow([{ ...edf, color: 'menthe' }], settings, 30, now);
+
+		expect(window).toEqual(reference);
+		expect(Object.keys(window[0]).sort()).toEqual(['body', 'sendAt', 'title']);
+		expect(JSON.stringify(window)).not.toMatch(/menthe/i);
+	});
+
+	/**
+	 * US-039 scénario 12 : l'urgence est un outil de priorisation d'affichage, jamais un mécanisme
+	 * d'insistance. Contenu du push identique, même instant d'envoi, aucune donnée supplémentaire
+	 * transmise au micro-scheduler (frontière ADR-001 non élargie), et aucun rappel inventé pour
+	 * une tâche urgente sans heure limite.
+	 */
+	it('scénario 12 (US-039) — une tâche urgente déclenche exactement le même rappel', () => {
+		const reference = computeTaskReminderWindow([edf], settings, 30, now);
+
+		const window = computeTaskReminderWindow([{ ...edf, urgent: true }], settings, 30, now);
+
+		expect(window).toEqual(reference);
+		expect(Object.keys(window[0]).sort()).toEqual(['body', 'sendAt', 'title']);
+		expect(JSON.stringify(window)).not.toMatch(/urgent|‼/i);
+	});
+
+	it("scénario 12 (US-039) — une tâche urgente SANS heure limite ne déclenche aucun rappel", () => {
+		const urgentSansHeure: Task = { ...edf, dueTime: undefined, urgent: true };
+		expect(computeTaskReminderWindow([urgentSansHeure], settings, 30, now)).toEqual([]);
 	});
 
 	it('scénario 4 — best-effort : aucun rappel pour une tâche déjà faite (resynchronisée)', () => {

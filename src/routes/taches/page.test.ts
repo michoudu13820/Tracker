@@ -75,3 +75,39 @@ describe('Tâches — resynchronisation des rappels au cochage (US-023)', () => 
 		expect(sync).toHaveBeenCalledTimes(2);
 	});
 });
+
+/**
+ * US-038 scénario 9 — l'écran « Tâches » ne triait que par date (`a.date.localeCompare(b.date)`),
+ * sans second critère : deux tâches d'un même jour y sortaient dans un ordre non maîtrisé.
+ */
+describe('Tâches — ordre d’affichage (US-038 scénario 9)', () => {
+	function taskNames(): string[] {
+		return Array.from(document.querySelectorAll('.task-item .name')).map(
+			(el) => el.textContent ?? ''
+		);
+	}
+
+	beforeEach(async () => {
+		await idbSet('tasks', [
+			{ id: 'a', name: 'J2 sans heure', date: '2026-09-02', createdAt: '2026-08-01' },
+			{ id: 'b', name: 'J1 18h', date: '2026-09-01', createdAt: '2026-08-01', dueTime: '18:00' },
+			{ id: 'c', name: 'J1 sans heure', date: '2026-09-01', createdAt: '2026-08-01' },
+			{ id: 'd', name: 'J2 09h', date: '2026-09-02', createdAt: '2026-08-01', dueTime: '09:00' },
+			{ id: 'e', name: 'J1 09h', date: '2026-09-01', createdAt: '2026-08-01', dueTime: '09:00' }
+		]);
+		tasksStore.loaded = false;
+	});
+
+	it('conserve le tri par date et applique la règle du planning à date égale', async () => {
+		render(Page);
+		await screen.findByText('J1 09h');
+
+		expect(taskNames()).toEqual([
+			'J1 09h',
+			'J1 18h',
+			'J1 sans heure',
+			'J2 09h',
+			'J2 sans heure'
+		]);
+	});
+});

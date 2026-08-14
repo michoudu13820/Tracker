@@ -41,6 +41,42 @@
 	--card-radius: 0.75rem;
 	--card-padding: 0.6rem 0.75rem;
 
+	/* ------------------------------------------------------------------------------------
+	   Palette de carte (US-036, réutilisée telle quelle par US-037) — LISTE FERMÉE de 8
+	   teintes, chacune déclinée en `-bg` (fond de carte très légèrement teinté) et `-border`
+	   (liseré gauche de 4 px d'US-010). Choisie par l'utilisateur, élément par élément : ces
+	   teintes ne signifient JAMAIS un état, un statut ou une priorité — les couleurs
+	   sémantiques (`--success-*`, `--danger-*`, `--warning-*`, `--habit-*`) ne sont ni
+	   modifiées ni réaffectées par cette palette.
+
+	   Contraintes vérifiées automatiquement par `src/app.css.test.ts` :
+	   - `--text` ET `--muted` gardent un contraste >= 4,5:1 sur chaque `-bg`, dans les DEUX
+	     thèmes (US-036 scénario 8, US-037 scénario 10) ;
+	   - chaque teinte est déclinée en clair ET en sombre (parité) ;
+	   - `--tint-lavande-*` est strictement égal à `--surface` / `--habit-border` du thème
+	     courant : une carte sans couleur choisie est rendue EXACTEMENT comme avant US-036
+	     (scénarios 3/4/6). C'est la seule teinte dont le liseré est volontairement identique
+	     dans les deux thèmes — parce que `--habit-border`/`--accent` le sont déjà aujourd'hui
+	     et que la non-régression du défaut prime. Les 7 autres teintes ont bien deux valeurs
+	     distinctes par thème.
+	   ------------------------------------------------------------------------------------ */
+	--tint-lavande-bg: #fffbfc;
+	--tint-lavande-border: #c9a6e6;
+	--tint-rose-bg: #fdf1f6;
+	--tint-rose-border: #e79ac0;
+	--tint-peche-bg: #fdf2eb;
+	--tint-peche-border: #f0a97c;
+	--tint-sable-bg: #fcf5e4;
+	--tint-sable-border: #d9b871;
+	--tint-menthe-bg: #edf8f1;
+	--tint-menthe-border: #84c79c;
+	--tint-ciel-bg: #eaf6fb;
+	--tint-ciel-border: #7cc0da;
+	--tint-bleu-bg: #eff0fc;
+	--tint-bleu-border: #93a1df;
+	--tint-gris-bg: #f3f2f4;
+	--tint-gris-border: #aea5ac;
+
 	/* Police de caractères (US-016) — source de vérité unique, dans l'esprit de la
 	   centralisation des couleurs (US-009). Valeur par défaut = pile système actuelle,
 	   inchangée tant que l'utilisateur n'a pas choisi une police dans Réglages ; appliquée/
@@ -86,6 +122,27 @@
 
 		--habit-border: #c9a6e6;
 		--habit-text: #d8bdf0;
+
+		/* Déclinaison sombre de la palette de carte (US-036 scénario 8) : fonds assombris dans
+		   la teinte, liserés remontés en luminosité pour rester perceptibles sur fond sombre.
+		   `--tint-lavande-*` suit `--surface`/`--habit-border` sombres, pour que le défaut
+		   reste indiscernable du rendu actuel en mode sombre aussi. */
+		--tint-lavande-bg: #2e222a;
+		--tint-lavande-border: #c9a6e6;
+		--tint-rose-bg: #3a2028;
+		--tint-rose-border: #e08bb0;
+		--tint-peche-bg: #3a2a1e;
+		--tint-peche-border: #dda06f;
+		--tint-sable-bg: #372f1c;
+		--tint-sable-border: #cfb069;
+		--tint-menthe-bg: #1e3328;
+		--tint-menthe-border: #74b993;
+		--tint-ciel-bg: #1c2f36;
+		--tint-ciel-border: #6bb2cd;
+		--tint-bleu-bg: #232739;
+		--tint-bleu-border: #8b9ada;
+		--tint-gris-bg: #2c2a2e;
+		--tint-gris-border: #a49aa2;
 
 		color-scheme: dark;
 	}

@@ -306,3 +306,56 @@ describe('HabitCard — cible chiffrée (US-017 scénario 2)', () => {
 		expect(screen.queryByText(/🎯/)).toBeNull();
 	});
 });
+
+describe('HabitCard — couleur de carte (US-036)', () => {
+	function card(container: HTMLElement) {
+		return container.querySelector('.habit-card-item') as HTMLElement;
+	}
+
+	it('scénario 2 — applique la teinte choisie au fond et au liseré', () => {
+		const { container } = render(HabitCard, baseProps({ habit: { ...habit, color: 'menthe' } }));
+
+		const el = card(container);
+		expect(el.dataset.cardColor).toBe('menthe');
+		expect(el.getAttribute('style')).toContain('--card-tint: var(--tint-menthe-bg)');
+		expect(el.getAttribute('style')).toContain('--card-accent: var(--tint-menthe-border)');
+	});
+
+	it('scénarios 3/4 — sans couleur choisie, rendu par défaut (habitudes déjà enregistrées)', () => {
+		const { container } = render(HabitCard, baseProps());
+
+		const el = card(container);
+		expect(el.dataset.cardColor).toBe('lavande');
+		expect(el.getAttribute('style')).toContain('--card-tint: var(--tint-lavande-bg)');
+		expect(screen.getByRole('button', { name: /^Yoga/ })).toBeInTheDocument();
+	});
+
+	it('scénario 11 — les badges de statut gardent leur sémantique sur une carte teintée', () => {
+		render(
+			HabitCard,
+			baseProps({ habit: { ...habit, color: 'menthe', status: 'paused' } })
+		);
+
+		const badge = screen.getByText('En pause');
+		expect(badge).toBeInTheDocument();
+		expect(badge.dataset.status).toBe('paused');
+	});
+
+	it('scénario 10 — une carte supprimée reste annoncée comme telle, quelle que soit sa teinte', () => {
+		render(
+			HabitCard,
+			baseProps({ habit: { ...habit, color: 'menthe', status: 'deleted' } })
+		);
+
+		expect(screen.getByText('Supprimée')).toBeInTheDocument();
+	});
+});
+
+describe('HabitCard — les habitudes ignorent l’urgence (US-039 scénario 13)', () => {
+	it("n'affiche jamais le signal ‼️ ni le libellé « Urgente »", () => {
+		const { container } = render(HabitCard, baseProps({ habit: { ...habit, color: 'menthe' } }));
+
+		expect(container.textContent).not.toContain('‼️');
+		expect(screen.queryByText(/Urgente/i)).toBeNull();
+	});
+});

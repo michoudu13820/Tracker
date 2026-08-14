@@ -5,6 +5,7 @@
 	 * a un besoin différent (édition au clic, pas de cochage).
 	 */
 	import type { Habit } from '$lib/domain/types';
+	import { cardColorStyle, resolveCardColor } from '$lib/domain/card-colors';
 
 	interface Props {
 		habit: Habit;
@@ -16,9 +17,12 @@
 	}
 
 	let { habit, done, onToggle, missedYesterday = false }: Props = $props();
+
+	/** Teinte de carte choisie (US-036 scénario 2 : rendu identique sur `/habitudes` et ici). */
+	const cardColor = $derived(resolveCardColor(habit.color));
 </script>
 
-<li class="habit-item">
+<li class="habit-item" data-card-color={cardColor} style={cardColorStyle(habit.color)}>
 	<label class="row">
 		<input
 			type="checkbox"
@@ -35,10 +39,12 @@
 </li>
 
 <style>
+	/* Teinte de carte (US-036) : fond légèrement teinté + liseré, branchés par `cardColorStyle`.
+	   Les valeurs de repli reproduisent le rendu d'avant US-036. */
 	.habit-item {
-		background: var(--surface);
+		background: var(--card-tint, var(--surface));
 		border: 1px solid var(--surface-border);
-		border-left: 4px solid var(--habit-border);
+		border-left: 4px solid var(--card-accent, var(--habit-border));
 		border-radius: var(--card-radius);
 		box-shadow: var(--surface-shadow);
 		padding: var(--card-padding);

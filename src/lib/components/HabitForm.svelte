@@ -6,21 +6,27 @@
 	 * à `$lib/domain/habits` (pure, testée séparément) — ce composant ne fait qu'assembler
 	 * l'état de saisie et appeler le domaine.
 	 */
-	import type { Habit, Weekday } from '$lib/domain/types';
+	import type { Habit, MonthDay, Weekday } from '$lib/domain/types';
 	import {
+		MONTH_DAY_ORDER,
 		TARGET_UNITS,
 		WEEKDAY_ORDER,
+		colorToDraft,
+		draftToColor,
 		draftToFrequency,
 		draftToTarget,
 		emptyHabitDraft,
 		frequencyToDraft,
+		monthDayLabel,
 		targetToDraft,
 		targetUnitLabel,
 		validateHabitDraft,
 		weekdayLabel,
+		type FrequencyMode,
 		type HabitDraft
 	} from '$lib/domain/habits';
 	import { toIsoDate } from '$lib/domain/dates';
+	import { CardColorPicker } from '$lib/components';
 
 	interface Props {
 		/** Habitude à éditer, ou `undefined` en création. */
@@ -37,25 +43,35 @@
 			name: habit.name,
 			emoji: habit.emoji,
 			...frequencyToDraft(habit.frequency),
-			...targetToDraft(habit.target)
+			...targetToDraft(habit.target),
+			...colorToDraft(habit.color)
 		};
 	}
 
 	let draft = $state<HabitDraft>(initialDraft());
 	let errors = $state<string[]>([]);
 
-	function selectMode(mode: 'interval' | 'weekdays') {
+	function selectMode(mode: FrequencyMode) {
 		if (draft.frequencyMode === mode) return;
-		// US-001 scénario 3 : bascule de mode = réinitialisation de l'autre mode, un seul actif.
+		// US-001 scénario 3 / US-032 scénario 4 : bascule de mode = réinitialisation des deux
+		// autres modes, un seul actif à la fois (dans les deux sens).
 		draft.frequencyMode = mode;
 		draft.intervalDays = null;
 		draft.weekdays = [];
+		draft.monthdays = [];
 	}
 
 	function toggleWeekday(day: Weekday) {
 		draft.weekdays = draft.weekdays.includes(day)
 			? draft.weekdays.filter((d) => d !== day)
 			: [...draft.weekdays, day];
+	}
+
+	/** Bascule cocher/décocher d'un quantième (US-032 scénario 3), symétrique de `toggleWeekday`. */
+	function toggleMonthDay(day: MonthDay) {
+		draft.monthdays = draft.monthdays.includes(day)
+			? draft.monthdays.filter((d) => d !== day)
+			: [...draft.monthdays, day];
 	}
 
 	function submit(e: Event) {
@@ -67,12 +83,19 @@
 		const anchor =
 			habit?.frequency.kind === 'interval' ? habit.frequency.anchor : toIsoDate(new Date());
 		const savedHabit: Habit = {
+			// US-036 scénario 5 : une édition ne touche QUE les champs du formulaire — les champs
+			// gérés ailleurs (statut de pause/suppression US-013/US-015, date de reprise
+			// automatique US-027) sont repris tels quels, jamais réinitialisés.
+			...habit,
 			id: habit?.id ?? crypto.randomUUID(),
 			name: draft.name.trim(),
 			emoji: draft.emoji,
 			frequency: draftToFrequency(draft, anchor),
 			createdAt: habit?.createdAt ?? toIsoDate(new Date()),
-			target: draftToTarget(draft)
+			target: draftToTarget(draft),
+			// US-036 scénarios 3/6 : `undefined` quand la teinte par défaut est sélectionnée —
+			// l'habitude reste alors strictement identique à une habitude sans couleur.
+			color: draftToColor(draft)
 		};
 		onSave(savedHabit);
 	}
@@ -106,6 +129,13 @@
 			>
 				Jours de la semaine
 			</button>
+			<button
+				type="button"
+				aria-pressed={draft.frequencyMode === 'monthdays'}
+				onclick={() => selectMode('monthdays')}
+			>
+				Jours du mois
+			</button>
 		</div>
 
 		{#if draft.frequencyMode === 'interval'}
@@ -132,6 +162,24 @@
 					</label>
 				{/each}
 			</div>
+		{:else if draft.frequencyMode === 'monthdays'}
+			<div class="monthdays" role="group" aria-label="Jours du mois">
+				{#each MONTH_DAY_ORDER as day (day)}
+					<label class="monthday">
+						<input
+							type="checkbox"
+							checked={draft.monthdays.includes(day)}
+							onchange={() => toggleMonthDay(day)}
+							aria-label={`${monthDayLabel(day)} du mois`}
+						/>
+						<span aria-hidden="true">{day}</span>
+					</label>
+				{/each}
+			</div>
+			<p class="hint">
+				Un jour absent du mois (le 31 en avril, le 29/30/31 en février) est reporté au dernier
+				jour du mois.
+			</p>
 		{/if}
 	</fieldset>
 
@@ -166,6 +214,12 @@
 			</div>
 		{/if}
 	</fieldset>
+
+	<CardColorPicker
+		value={draft.color}
+		onChange={(color) => (draft.color = color)}
+		idPrefix="habit-color"
+	/>
 
 	{#if errors.length > 0}
 		<ul class="errors" role="alert">
@@ -224,10 +278,15 @@
 	}
 	.mode-toggle {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.5rem;
 	}
 	.mode-toggle button {
-		flex: 1;
+		/* 3 modes depuis US-032 : on autorise le retour à la ligne plutôt que d'écraser les
+		   libellés sur la largeur d'un iPhone. */
+		flex: 1 1 8rem;
+		padding: 0 0.4rem;
+		font-size: 0.85rem;
 		min-height: 44px;
 		border-radius: 0.35rem;
 		border: 1px solid var(--surface-border);
@@ -249,6 +308,54 @@
 		align-items: center;
 		gap: 0.25rem;
 		min-height: 44px;
+	}
+	/* Sélecteur de quantièmes 1–31 (US-032) : grille de 7 colonnes, cibles tactiles ≥ 40px,
+	   même principe de bascule que les jours de semaine ci-dessus. */
+	.monthdays {
+		display: grid;
+		grid-template-columns: repeat(7, 1fr);
+		gap: 0.3rem;
+	}
+	.monthday {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.monthday input {
+		position: absolute;
+		width: 100%;
+		height: 100%;
+		margin: 0;
+		opacity: 0;
+		cursor: pointer;
+	}
+	.monthday span {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		min-height: 40px;
+		border: 1px solid var(--surface-border);
+		border-radius: 0.35rem;
+		background: var(--bg);
+		color: var(--text);
+		font-size: 0.85rem;
+	}
+	.monthday input:checked + span {
+		background: var(--accent);
+		color: var(--accent-text);
+		border-color: var(--accent);
+		font-weight: 600;
+	}
+	.monthday input:focus-visible + span {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+	.hint {
+		margin: 0;
+		font-size: 0.75rem;
+		color: var(--muted);
 	}
 	.target-toggle {
 		display: flex;

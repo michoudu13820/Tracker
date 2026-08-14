@@ -11,3 +11,4 @@ export { default as SwipeToDelete } from './SwipeToDelete.svelte';
 export { default as ConfirmDialog } from './ConfirmDialog.svelte';
 export { default as HabitForm } from './HabitForm.svelte';
 export { default as TaskForm } from './TaskForm.svelte';
+export { default as CardColorPicker } from './CardColorPicker.svelte';

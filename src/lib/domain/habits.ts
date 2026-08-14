@@ -1,4 +1,19 @@
-import type { Frequency, Habit, HabitStatus, HabitTarget, HabitTargetUnit, IsoDate, Weekday } from './types';
+import type {
+	Frequency,
+	Habit,
+	HabitStatus,
+	HabitTarget,
+	HabitTargetUnit,
+	IsoDate,
+	MonthDay,
+	Weekday
+} from './types';
+import {
+	DEFAULT_CARD_COLOR,
+	cardColorToPersist,
+	resolveCardColor,
+	type CardColor
+} from './card-colors';
 
 /**
  * Cœur métier de la création/édition d'une habitude (US-001) : validation du formulaire
@@ -6,19 +21,29 @@ import type { Frequency, Habit, HabitStatus, HabitTarget, HabitTargetUnit, IsoDa
  * au framework ni au stockage — la couche UI (route `habitudes`) délègue ici la logique.
  */
 
-/** Brouillon de formulaire (avant conversion en `Habit`) : les deux modes de fréquence
- * sont mutuellement exclusifs (US-001 scénario 3), représentés par `frequencyMode`. */
+/** Mode de fréquence sélectionné dans le formulaire : les trois modes sont mutuellement
+ * exclusifs (US-001 scénario 3, étendu par US-032 scénario 4). */
+export type FrequencyMode = 'interval' | 'weekdays' | 'monthdays';
+
+/** Brouillon de formulaire (avant conversion en `Habit`) : les trois modes de fréquence
+ * sont mutuellement exclusifs (US-001 scénario 3 / US-032 scénario 4), représentés par
+ * `frequencyMode` — les champs des modes non actifs sont réinitialisés, jamais cumulés. */
 export interface HabitDraft {
 	name: string;
 	emoji: string;
-	frequencyMode: 'interval' | 'weekdays' | null;
+	frequencyMode: FrequencyMode | null;
 	intervalDays: number | null;
 	weekdays: Weekday[];
+	/** Quantièmes du mois sélectionnés (US-032), pertinents uniquement en mode `monthdays`. */
+	monthdays: MonthDay[];
 	/** Cible chiffrée optionnelle (US-017 scénario 2) : activation indépendante du reste du
 	 * formulaire, valeur + unité mutuellement dépendantes de `hasTarget`. */
 	hasTarget: boolean;
 	targetValue: number | null;
 	targetUnit: HabitTargetUnit;
+	/** Teinte de carte sélectionnée (US-036) — toujours renseignée dans le brouillon (la teinte
+	 * par défaut est présélectionnée), mais persistée seulement si elle diffère du défaut. */
+	color: CardColor;
 }
 
 export interface HabitValidation {
@@ -34,16 +59,18 @@ export function emptyHabitDraft(): HabitDraft {
 		frequencyMode: null,
 		intervalDays: null,
 		weekdays: [],
+		monthdays: [],
 		hasTarget: false,
 		targetValue: null,
-		targetUnit: 'L'
+		targetUnit: 'L',
+		color: DEFAULT_CARD_COLOR
 	};
 }
 
 /**
- * Valide un brouillon d'habitude (US-001 scénario 5) : nom obligatoire, et exactement
- * un des deux modes de fréquence renseigné avec une valeur exploitable (intervalle >= 1
- * jour, ou au moins un jour de semaine sélectionné).
+ * Valide un brouillon d'habitude (US-001 scénario 5, US-032 scénario 5) : nom obligatoire, et
+ * exactement un des trois modes de fréquence renseigné avec une valeur exploitable (intervalle
+ * >= 1 jour, au moins un jour de semaine, ou au moins un jour du mois sélectionné).
  */
 export function validateHabitDraft(draft: HabitDraft): HabitValidation {
 	const errors: string[] = [];
@@ -53,7 +80,9 @@ export function validateHabitDraft(draft: HabitDraft): HabitValidation {
 	}
 
 	if (!draft.frequencyMode) {
-		errors.push('Choisissez un mode de fréquence : intervalle en jours ou jours de la semaine.');
+		errors.push(
+			'Choisissez un mode de fréquence : intervalle en jours, jours de la semaine ou jours du mois.'
+		);
 	} else if (draft.frequencyMode === 'interval') {
 		if (!draft.intervalDays || draft.intervalDays < 1) {
 			errors.push("L'intervalle doit être d'au moins 1 jour.");
@@ -61,6 +90,10 @@ export function validateHabitDraft(draft: HabitDraft): HabitValidation {
 	} else if (draft.frequencyMode === 'weekdays') {
 		if (draft.weekdays.length === 0) {
 			errors.push('Sélectionnez au moins un jour de la semaine.');
+		}
+	} else if (draft.frequencyMode === 'monthdays') {
+		if (draft.monthdays.length === 0) {
+			errors.push('Sélectionnez au moins un jour du mois.');
 		}
 	}
 
@@ -87,16 +120,41 @@ export function draftToFrequency(draft: HabitDraft, anchor: IsoDate): Frequency 
 	if (draft.frequencyMode === 'weekdays') {
 		return { kind: 'weekdays', weekdays: draft.weekdays };
 	}
+	if (draft.frequencyMode === 'monthdays') {
+		// Normalisé à l'enregistrement (US-032 scénario 2 : libellé croissant quel que soit
+		// l'ordre de cochage) — le tri et la déduplication sont faits ici, une fois pour toutes.
+		return { kind: 'monthdays', monthdays: sortedUniqueMonthDays(draft.monthdays) };
+	}
 	// 'interval' (seul autre cas valide après validation).
 	return { kind: 'interval', days: draft.intervalDays ?? 1, anchor };
 }
 
 /** Reconstruit un brouillon de formulaire à partir d'une fréquence existante (édition). */
-export function frequencyToDraft(frequency: Frequency): Pick<HabitDraft, 'frequencyMode' | 'intervalDays' | 'weekdays'> {
+export function frequencyToDraft(
+	frequency: Frequency
+): Pick<HabitDraft, 'frequencyMode' | 'intervalDays' | 'weekdays' | 'monthdays'> {
 	if (frequency.kind === 'interval') {
-		return { frequencyMode: 'interval', intervalDays: frequency.days, weekdays: [] };
+		return {
+			frequencyMode: 'interval',
+			intervalDays: frequency.days,
+			weekdays: [],
+			monthdays: []
+		};
 	}
-	return { frequencyMode: 'weekdays', intervalDays: null, weekdays: frequency.weekdays };
+	if (frequency.kind === 'monthdays') {
+		return {
+			frequencyMode: 'monthdays',
+			intervalDays: null,
+			weekdays: [],
+			monthdays: sortedUniqueMonthDays(frequency.monthdays)
+		};
+	}
+	return {
+		frequencyMode: 'weekdays',
+		intervalDays: null,
+		weekdays: frequency.weekdays,
+		monthdays: []
+	};
 }
 
 /** Liste fermée des unités de cible chiffrée (US-017 scénario 3), dans l'ordre d'affichage. */
@@ -132,6 +190,18 @@ export function targetToDraft(
 	return { hasTarget: true, targetValue: target.value, targetUnit: target.unit };
 }
 
+/** Teinte à présélectionner dans le formulaire pour une habitude existante (US-036 scénario 5) :
+ * sa teinte enregistrée, ou la teinte par défaut si elle n'en a jamais eu (scénario 4). */
+export function colorToDraft(color?: CardColor): Pick<HabitDraft, 'color'> {
+	return { color: resolveCardColor(color) };
+}
+
+/** Teinte à persister à partir d'un brouillon (US-036 scénarios 3/6) : `undefined` quand la
+ * teinte par défaut est sélectionnée, pour rester indiscernable d'une habitude sans couleur. */
+export function draftToColor(draft: HabitDraft): CardColor | undefined {
+	return cardColorToPersist(draft.color);
+}
+
 /** Une habitude a une cible chiffrée active (US-017/US-018), par opposition à une simple case
  * à cocher (US-001/US-004) — condition de branchement pour le planning (US-018) et la liste. */
 export function hasNumericTarget(habit: Habit): boolean {
@@ -165,6 +235,32 @@ export const WEEKDAY_ORDER: Weekday[] = [1, 2, 3, 4, 5, 6, 0];
 
 export function weekdayLabel(day: Weekday): string {
 	return WEEKDAY_LABELS[day];
+}
+
+/** Quantièmes proposés par le sélecteur « jours du mois » (US-032 scénario 3) : 1 à 31 inclus,
+ * bornes fermées — aucune autre valeur n'est proposée ni acceptée. */
+export const MONTH_DAY_ORDER: MonthDay[] = Array.from({ length: 31 }, (_, i) => i + 1);
+
+/** Un quantième est valide s'il appartient à l'intervalle 1–31 (US-032 scénario 3). */
+export function isValidMonthDay(day: number): boolean {
+	return Number.isInteger(day) && day >= 1 && day <= 31;
+}
+
+/** Trie et déduplique une sélection de quantièmes, en écartant les valeurs hors 1–31 —
+ * garantit un libellé et une persistance déterministes (US-032 scénarios 2/3). */
+export function sortedUniqueMonthDays(days: MonthDay[]): MonthDay[] {
+	return [...new Set(days.filter(isValidMonthDay))].sort((a, b) => a - b);
+}
+
+/** Libellé d'un quantième pour l'affichage français : « 1er » pour le 1, le nombre sinon. */
+export function monthDayLabel(day: MonthDay): string {
+	return day === 1 ? '1er' : String(day);
+}
+
+/** Énumération française « a, b et c » (dernier séparateur « et ») pour les libellés lisibles. */
+function joinFr(parts: string[]): string {
+	if (parts.length <= 1) return parts[0] ?? '';
+	return `${parts.slice(0, -1).join(', ')} et ${parts.at(-1)}`;
 }
 
 /**
@@ -221,6 +317,14 @@ export function isDueForAutoResume(habit: Habit, today: IsoDate): boolean {
 export function describeFrequency(frequency: Frequency): string {
 	if (frequency.kind === 'interval') {
 		return frequency.days === 1 ? 'Tous les jours' : `Tous les ${frequency.days} jours`;
+	}
+	if (frequency.kind === 'monthdays') {
+		// US-032 scénarios 1/2 : quantièmes toujours énumérés en ordre croissant, quel que soit
+		// l'ordre de cochage dans le formulaire.
+		const days = sortedUniqueMonthDays(frequency.monthdays);
+		if (days.length === 0) return 'Aucun jour sélectionné';
+		const article = days.length === 1 ? 'Le' : 'Les';
+		return `${article} ${joinFr(days.map(monthDayLabel))} de chaque mois`;
 	}
 	if (frequency.weekdays.length === 0) return 'Aucun jour sélectionné';
 	return WEEKDAY_ORDER.filter((d) => frequency.weekdays.includes(d))

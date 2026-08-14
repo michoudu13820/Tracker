@@ -1,5 +1,5 @@
 import type { IsoDate, Task } from '$lib/domain/types';
-import { tasksOn, visibleTasks } from '$lib/domain/tasks';
+import { sortTasksForDay, tasksOn, visibleTasks } from '$lib/domain/tasks';
 import { idbRepositories, type TasksRepository } from '$lib/data/repositories';
 
 /**
@@ -21,9 +21,13 @@ export class TasksStore {
 		this.loaded = true;
 	}
 
-	/** Tâches actives datées d'un jour donné (US-004). Exclut les tâches supprimées (US-014). */
+	/**
+	 * Tâches actives datées d'un jour donné (US-004). Exclut les tâches supprimées (US-014) et
+	 * applique l'ordre d'affichage du jour (US-038, étendu par US-039) — jusqu'ici la liste
+	 * sortait dans son ordre d'insertion, jamais chronologique.
+	 */
 	onDate(date: IsoDate): Task[] {
-		return tasksOn(visibleTasks(this.tasks), date);
+		return sortTasksForDay(tasksOn(visibleTasks(this.tasks), date));
 	}
 
 	/** Crée ou met à jour une tâche (US-002). La reprogrammation (US-003) est un upsert de date. */

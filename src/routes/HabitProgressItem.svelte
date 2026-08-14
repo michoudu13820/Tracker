@@ -9,6 +9,7 @@
 	 * Colocalisée comme `HabitCheckItem` : usage unique dans cette route (CONVENTIONS.md §7).
 	 */
 	import type { Habit } from '$lib/domain/types';
+	import { cardColorStyle, resolveCardColor } from '$lib/domain/card-colors';
 	import { describeTarget, formatTargetNumber } from '$lib/domain/habits';
 	import { parseAmount, progressPercent, validateAmount } from '$lib/domain/progress';
 
@@ -29,6 +30,9 @@
 	}
 
 	let { habit, value, done, onAdd, onCorrect, missedYesterday = false }: Props = $props();
+
+	/** Teinte de carte choisie (US-036 scénario 2 : même rendu que les autres cartes d'habitude). */
+	const cardColor = $derived(resolveCardColor(habit.color));
 
 	const target = $derived(habit.target as NonNullable<Habit['target']>);
 	const percent = $derived(progressPercent(value, target.value));
@@ -70,7 +74,7 @@
 	}
 </script>
 
-<li class="habit-item">
+<li class="habit-item" data-card-color={cardColor} style={cardColorStyle(habit.color)}>
 	<div class="row">
 		<span class="emoji" aria-hidden="true">{habit.emoji}</span>
 		<div class="info">
@@ -127,10 +131,12 @@
 </li>
 
 <style>
+	/* Teinte de carte (US-036) — la barre de progression et le bouton « + » ne sont jamais
+	   teintés (décision PO : la couleur n'habille que le liseré et le fond de carte). */
 	.habit-item {
-		background: var(--surface);
+		background: var(--card-tint, var(--surface));
 		border: 1px solid var(--surface-border);
-		border-left: 4px solid var(--habit-border);
+		border-left: 4px solid var(--card-accent, var(--habit-border));
 		border-radius: var(--card-radius);
 		box-shadow: var(--surface-shadow);
 		padding: var(--card-padding);

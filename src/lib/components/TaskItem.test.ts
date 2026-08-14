@@ -330,3 +330,200 @@ describe('TaskItem — suppression par glisser + confirmation (US-014)', () => {
 		expect(onToggle).not.toHaveBeenCalled();
 	});
 });
+
+describe('TaskItem — couleur de carte (US-037)', () => {
+	function card(container: HTMLElement) {
+		return container.querySelector('.task-item') as HTMLElement;
+	}
+
+	it('scénario 2 — applique la teinte choisie au fond et au liseré', () => {
+		const { container } = render(TaskItem, {
+			task: { ...task, color: 'ciel' },
+			done: false,
+			today: '2026-08-12',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn()
+		});
+
+		const el = card(container);
+		expect(el.dataset.cardColor).toBe('ciel');
+		expect(el.getAttribute('style')).toContain('--card-tint: var(--tint-ciel-bg)');
+		expect(el.getAttribute('style')).toContain('--card-accent: var(--tint-ciel-border)');
+	});
+
+	it('scénarios 3/4 — sans couleur choisie, rendu par défaut (tâches déjà enregistrées)', () => {
+		const { container } = render(TaskItem, {
+			task,
+			done: false,
+			today: '2026-08-12',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn()
+		});
+
+		const el = card(container);
+		expect(el.dataset.cardColor).toBe('lavande');
+		expect(el.getAttribute('style')).toContain('--card-tint: var(--tint-lavande-bg)');
+	});
+
+	it("scénario 8 — le badge de statut garde sa sémantique sur une carte teintée « Menthe »", () => {
+		const { container } = render(TaskItem, {
+			task: { ...task, color: 'menthe' },
+			done: false,
+			today: '2026-08-13',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn()
+		});
+
+		const badge = screen.getByText('En retard');
+		expect(badge.dataset.status).toBe('overdue');
+		// La teinte de carte et le statut vivent sur deux éléments distincts : jamais de confusion
+		// possible entre « carte verte » et « tâche faite ».
+		expect(card(container).dataset.cardColor).toBe('menthe');
+	});
+
+	it('scénario 8 — le texte barré d’une tâche faite reste porté par la classe, pas par la teinte', () => {
+		render(TaskItem, {
+			task: { ...task, color: 'sable' },
+			done: true,
+			today: '2026-08-12',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn()
+		});
+
+		expect(screen.getByText('Appeler le plombier')).toHaveClass('done');
+		expect(screen.getByText('Faite')).toBeInTheDocument();
+	});
+
+	it('scénario 9 — l’icône ✅ de type reste présente quelle que soit la teinte', () => {
+		render(TaskItem, {
+			task: { ...task, color: 'menthe' },
+			done: false,
+			today: '2026-08-12',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn()
+		});
+
+		expect(screen.getByText('✅')).toBeInTheDocument();
+	});
+
+	it('scénario 11 — toutes les informations restent restituées sans percevoir la couleur', () => {
+		render(TaskItem, {
+			task: { ...task, color: 'menthe', dueTime: '14:30' },
+			done: false,
+			today: '2026-08-13',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn(),
+			onEdit: vi.fn()
+		});
+
+		expect(screen.getByText('Appeler le plombier')).toBeInTheDocument();
+		expect(screen.getByText(/12\/08\/2026/)).toBeInTheDocument();
+		expect(screen.getByText(/14:30/)).toBeInTheDocument();
+		expect(screen.getByText('En retard')).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Reprogrammer' })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Modifier' })).toBeInTheDocument();
+	});
+});
+
+describe('TaskItem — signal d’urgence (US-039)', () => {
+	function renderTask(overrides: Partial<Task>, props: Record<string, unknown> = {}) {
+		return render(TaskItem, {
+			task: { ...task, ...overrides },
+			done: false,
+			today: '2026-08-12',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn(),
+			...props
+		});
+	}
+
+	it('scénario 7 — affiche le glyphe ‼️ ET le mot « Urgente »', () => {
+		const { container } = renderTask({ urgent: true });
+
+		const badge = container.querySelector('.badge.urgent') as HTMLElement;
+		expect(badge).not.toBeNull();
+		expect(badge.textContent).toContain('‼️');
+		expect(badge.textContent).toContain('Urgente');
+	});
+
+	it("scénario 7 — le glyphe est décoratif : c'est le mot qui est annoncé, jamais le nom d'emoji", () => {
+		const { container } = renderTask({ urgent: true });
+
+		const glyph = container.querySelector('.badge.urgent [aria-hidden="true"]') as HTMLElement;
+		expect(glyph.textContent).toBe('‼️');
+		// Texte réellement accessible du badge, une fois le glyphe décoratif retiré.
+		expect(screen.getByText(/Urgente/)).toBeInTheDocument();
+	});
+
+	it('scénario 2 — aucun signal d’urgence sur une tâche ordinaire', () => {
+		const { container } = renderTask({});
+		expect(container.querySelector('.badge.urgent')).toBeNull();
+		expect(screen.queryByText(/Urgente/)).toBeNull();
+	});
+
+	it('scénario 3 — une tâche persistée avant l’évolution n’affiche aucun signal', () => {
+		// `task` de référence ne porte aucun champ `urgent`.
+		const { container } = renderTask({});
+		expect(container.querySelector('.badge.urgent')).toBeNull();
+		expect(screen.getByText('À faire')).toBeInTheDocument();
+	});
+
+	it('scénario 8 — coexiste avec le badge « En retard » sans lui emprunter sa teinte rouge', () => {
+		const { container } = renderTask({ urgent: true }, { today: '2026-08-13' });
+
+		const urgentBadge = container.querySelector('.badge.urgent') as HTMLElement;
+		const statusBadge = screen.getByText('En retard');
+
+		expect(urgentBadge).not.toBeNull();
+		expect(statusBadge.dataset.status).toBe('overdue');
+		// Le badge d'urgence n'est PAS un badge de statut : il ne porte aucun `data-status`,
+		// donc aucune des règles `--danger-*` de la feuille de style.
+		expect(urgentBadge.dataset.status).toBeUndefined();
+	});
+
+	it('scénario 8 — conserve l’icône ✅ qui identifie la carte comme une tâche', () => {
+		renderTask({ urgent: true });
+		expect(screen.getByText('✅')).toBeInTheDocument();
+	});
+
+	it('scénario 8 — supporte nom long + heure limite + statut + urgence simultanément', () => {
+		const longName =
+			'Préparer le dossier complet de renouvellement du passeport pour toute la famille';
+		renderTask({ urgent: true, dueTime: '14:30', name: longName }, { today: '2026-08-13' });
+
+		expect(screen.getByText(longName)).toBeInTheDocument();
+		expect(screen.getByText(/14:30/)).toBeInTheDocument();
+		expect(screen.getByText('En retard')).toBeInTheDocument();
+		expect(screen.getByText(/Urgente/)).toBeInTheDocument();
+	});
+
+	it('scénario 9 — une urgente cochée garde son signal et son affichage « faite »', () => {
+		render(TaskItem, {
+			task: { ...task, urgent: true },
+			done: true,
+			today: '2026-08-12',
+			onToggle: vi.fn(),
+			onReschedule: vi.fn()
+		});
+
+		expect(screen.getByText(/Urgente/)).toBeInTheDocument();
+		expect(screen.getByText('Faite')).toBeInTheDocument();
+		expect(screen.getByText('Appeler le plombier')).toHaveClass('done');
+		expect(screen.getByRole('checkbox')).toBeChecked();
+	});
+
+	it('scénario 10 — l’urgence n’impose ni n’écrase la couleur de carte choisie', () => {
+		const { container } = renderTask({ urgent: true, color: 'menthe' });
+
+		const card = container.querySelector('.task-item') as HTMLElement;
+		expect(card.dataset.cardColor).toBe('menthe');
+		expect(card.getAttribute('style')).toContain('--card-tint: var(--tint-menthe-bg)');
+	});
+
+	it('scénario 12 — n’introduit ni décompte, ni compte à rebours, ni message d’alerte', () => {
+		renderTask({ urgent: true, dueTime: '14:30' });
+
+		expect(screen.queryByRole('alert')).toBeNull();
+		expect(screen.queryByText(/reste|restant|compte à rebours|dans \d+/i)).toBeNull();
+	});
+});

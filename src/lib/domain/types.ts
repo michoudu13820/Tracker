@@ -3,13 +3,29 @@
  * Ces types sont la source de vérité partagée entre `domain`, `data` et `stores`.
  */
 
+import type { CardColor } from './card-colors';
+
 /** Jour de la semaine, 0 = dimanche … 6 = samedi (aligné sur Date.getDay()). */
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
-/** Fréquence d'une habitude : soit un intervalle de N jours, soit des jours de semaine fixes. */
+/**
+ * Quantième du mois retenu par la fréquence « jours du mois » (US-032), borné à 1–31 (scénario 3).
+ * Un quantième absent du mois consulté (31 en avril, 29/30/31 en février) ne fait pas disparaître
+ * l'occurrence : elle est repliée sur le **dernier jour du mois** — règle produit tranchée et non
+ * renégociable, voir `$lib/domain/occurrences#resolveMonthDays`.
+ */
+export type MonthDay = number;
+
+/**
+ * Fréquence d'une habitude : intervalle de N jours, jours de semaine fixes, ou quantièmes du
+ * mois (US-032). Union discriminée par `kind` — **jamais** de champ commun : une habitude déjà
+ * persistée avec `interval`/`weekdays` reste lue et interprétée exactement comme avant
+ * l'ajout de `monthdays` (rétro-compatibilité stricte, aucune migration — US-032 scénario 11).
+ */
 export type Frequency =
 	| { kind: 'interval'; days: number; anchor: IsoDate }
-	| { kind: 'weekdays'; weekdays: Weekday[] };
+	| { kind: 'weekdays'; weekdays: Weekday[] }
+	| { kind: 'monthdays'; monthdays: MonthDay[] };
 
 /** Date locale au format ISO `YYYY-MM-DD` (sans heure ni fuseau — c'est un jour calendaire). */
 export type IsoDate = string;
@@ -55,6 +71,14 @@ export interface Habit {
 	 * (comportement historique d'US-015, inchangé par défaut).
 	 */
 	resumeAt?: IsoDate;
+	/**
+	 * Teinte de carte choisie par l'utilisateur (US-036), parmi la palette **fermée** de
+	 * `$lib/domain/card-colors`. Repère personnel : ne signifie jamais un état, un statut ni
+	 * une priorité. `undefined` = teinte par défaut, rendu strictement identique à celui d'avant
+	 * l'introduction de la palette — aucune migration des habitudes déjà persistées (même
+	 * principe que `status` et `target`).
+	 */
+	color?: CardColor;
 }
 
 /**
@@ -81,6 +105,22 @@ export interface Task {
 	 * de précision à la minute.
 	 */
 	dueTime?: string;
+	/**
+	 * Teinte de carte choisie par l'utilisateur (US-037) — **exactement la même palette fermée**
+	 * que les habitudes (US-036), aucune teinte propre aux tâches. Repère personnel : ne signifie
+	 * jamais un statut, une échéance ni une priorité (la priorisation, c'est `urgent`).
+	 * `undefined` = teinte par défaut, rendu strictement identique à celui d'avant US-037 —
+	 * aucune migration (même principe que `status` et `dueTime`).
+	 */
+	color?: CardColor;
+	/**
+	 * Marquage « urgente » (US-039) : **purement manuel**, sans escalade — aucune tâche ne devient
+	 * jamais urgente d'elle-même (ni à l'approche de son heure limite, ni en passant en retard).
+	 * Réservé aux tâches ponctuelles : les habitudes n'ont pas d'équivalent. `undefined` = non
+	 * urgente, comportement historique inchangé — aucune migration (même principe que `status` et
+	 * `dueTime`). Ne modifie ni les instants d'envoi ni le contenu des rappels push (US-022).
+	 */
+	urgent?: boolean;
 }
 
 /** Complétion d'une habitude un jour donné (historique 100% local). */

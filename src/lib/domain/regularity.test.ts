@@ -103,3 +103,73 @@ describe('missedYesterday (US-025)', () => {
 		expect(missedYesterday(yoga, completions, today)).toBe(false);
 	});
 });
+
+/**
+ * US-033 scénarios 4/5 — la carte d'habitude (US-024/US-025) doit traiter la fréquence
+ * « jours du mois » (US-032) comme les autres. Arbitrage US-024 inchangé : aucune mécanique de
+ * série n'est introduite ici, on vérifie uniquement le classement des jours et le compteur neutre.
+ */
+describe('Carte d’habitude et fréquence « jours du mois » (US-033)', () => {
+	const monthly: Habit = {
+		id: 'hm',
+		name: 'Sauvegarde',
+		emoji: '💾',
+		createdAt: '2026-01-01',
+		frequency: { kind: 'monthdays', monthdays: [1, 15] }
+	};
+
+	it('scénario 4 — les pastilles distinguent le jour réellement dû des jours non concernés', () => {
+		const today = '2026-08-17'; // fenêtre : 11 → 17 août, seul le 15 est dû
+		const days = last7DaysRegularity(monthly, [], today);
+		expect(days.map((d) => d.status)).toEqual([
+			'not-due', // 11
+			'not-due', // 12
+			'not-due', // 13
+			'not-due', // 14
+			'missed', // 15 — dû, non fait
+			'not-due', // 16
+			'not-due' // 17
+		]);
+	});
+
+	it('scénario 4 — la pastille du jour dû passe à « done » une fois coché', () => {
+		const completions: HabitCompletion[] = [{ habitId: 'hm', date: '2026-08-15', done: true }];
+		const days = last7DaysRegularity(monthly, completions, '2026-08-17');
+		expect(days.find((d) => d.date === '2026-08-15')?.status).toBe('done');
+	});
+
+	it('scénario 4 — le compteur neutre reflète le nombre réel de complétions du mois', () => {
+		const completions: HabitCompletion[] = [
+			{ habitId: 'hm', date: '2026-08-01', done: true },
+			{ habitId: 'hm', date: '2026-08-15', done: true },
+			{ habitId: 'hm', date: '2026-07-15', done: true } // mois précédent : non compté
+		];
+		expect(monthlyCompletionCount(monthly, completions, '2026-08-17')).toBe(2);
+	});
+
+	it('scénario 5 — « manquée hier » s’affiche le 16 quand l’occurrence du 15 a été manquée', () => {
+		expect(missedYesterday(monthly, [], '2026-08-16')).toBe(true);
+	});
+
+	it('scénario 5 — « manquée hier » ne s’affiche pas les jours où l’habitude n’était pas due', () => {
+		expect(missedYesterday(monthly, [], '2026-08-18')).toBe(false); // hier = 17, non dû
+		expect(missedYesterday(monthly, [], '2026-08-10')).toBe(false); // hier = 9, non dû
+	});
+
+	it('scénario 5 — « manquée hier » ne s’affiche pas si l’occurrence d’hier a été faite', () => {
+		const completions: HabitCompletion[] = [{ habitId: 'hm', date: '2026-08-15', done: true }];
+		expect(missedYesterday(monthly, completions, '2026-08-16')).toBe(false);
+	});
+
+	it('scénario 5 — le repli fin de mois est pris en compte par « manquée hier »', () => {
+		const lastDay: Habit = {
+			...monthly,
+			id: 'hm2',
+			frequency: { kind: 'monthdays', monthdays: [31] }
+		};
+		// Février 2026 (non bissextile) : l'occurrence est repliée sur le 28.
+		expect(missedYesterday(lastDay, [], '2026-03-01')).toBe(true);
+		expect(missedYesterday(lastDay, [], '2026-02-28')).toBe(false); // hier = 27, non dû
+	});
+});
+

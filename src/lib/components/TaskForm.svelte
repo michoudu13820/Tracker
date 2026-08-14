@@ -5,8 +5,16 @@
 	 * usage par une 2ᵉ route (voir CONVENTIONS.md §7). Validation déléguée à `$lib/domain/tasks`.
 	 */
 	import type { Task, IsoDate } from '$lib/domain/types';
-	import { validateTaskDraft, type TaskDraft } from '$lib/domain/tasks';
+	import {
+		draftToTaskColor,
+		draftToUrgent,
+		taskColorToDraft,
+		validateTaskDraft,
+		type TaskDraft
+	} from '$lib/domain/tasks';
+	import { DEFAULT_CARD_COLOR } from '$lib/domain/card-colors';
 	import { toIsoDate, roundTimeToQuarterHour } from '$lib/domain/dates';
+	import { CardColorPicker } from '$lib/components';
 
 	interface Props {
 		/** Tâche à éditer, ou `undefined` en création. */
@@ -24,7 +32,10 @@
 		return {
 			name: task?.name ?? '',
 			date: task?.date ?? defaultDate ?? null,
-			dueTime: task?.dueTime ?? null
+			dueTime: task?.dueTime ?? null,
+			...taskColorToDraft(task?.color),
+			// US-039 scénarios 2/11 : désactivé par défaut à la création comme dans l'ajout rapide.
+			urgent: task?.urgent === true
 		};
 	}
 
@@ -41,12 +52,22 @@
 		// jamais stockée à la minute près, même si le sélecteur du navigateur l'a permis.
 		const dueTime = draft.dueTime ? roundTimeToQuarterHour(draft.dueTime) : undefined;
 
+		// US-037 scénarios 3/5 : la teinte par défaut n'est pas persistée — une tâche remise en
+		// « Lavande » redevient strictement indiscernable d'une tâche n'ayant jamais eu de couleur.
+		const color = draftToTaskColor(draft);
+
 		const savedTask: Task = {
+			// US-037 scénario 7 : une édition ne touche QUE les champs du formulaire — les champs
+			// gérés ailleurs (statut de suppression US-014) sont repris tels quels.
+			...task,
 			id: task?.id ?? crypto.randomUUID(),
 			name: draft.name.trim(),
 			date: draft.date as IsoDate,
 			createdAt: task?.createdAt ?? toIsoDate(new Date()),
-			...(dueTime ? { dueTime } : {})
+			dueTime,
+			color,
+			// US-039 scénarios 2/4 : `undefined` quand le marquage n'est pas activé.
+			urgent: draftToUrgent(draft)
 		};
 		onSave(savedTask);
 	}
@@ -76,6 +97,18 @@
 		<label for="task-due-time">Heure limite (optionnelle)</label>
 		<input id="task-due-time" type="time" step="900" bind:value={draft.dueTime} />
 	</div>
+
+	<!-- Marquage d'urgence (US-039) : réservé aux tâches ponctuelles, jamais aux habitudes. -->
+	<label class="urgent-toggle">
+		<input type="checkbox" bind:checked={draft.urgent} />
+		Urgente
+	</label>
+
+	<CardColorPicker
+		value={draft.color ?? DEFAULT_CARD_COLOR}
+		onChange={(color) => (draft.color = color)}
+		idPrefix="task-color"
+	/>
 
 	{#if errors.length > 0}
 		<ul class="errors" role="alert">
@@ -119,6 +152,14 @@
 		color: var(--text);
 		padding: 0.5rem;
 		min-height: 44px;
+	}
+	.urgent-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-height: 44px;
+		font-size: 0.9rem;
+		color: var(--text);
 	}
 	.errors {
 		color: var(--danger-text);

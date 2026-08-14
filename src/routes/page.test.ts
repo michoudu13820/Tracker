@@ -354,3 +354,120 @@ describe('Planning quotidien — habitude à cible chiffrée (US-018, intégrati
 		expect(screen.getByText(habitWithTarget.name)).not.toHaveClass('done');
 	});
 });
+
+/**
+ * US-038 — l'ordre d'affichage des tâches du jour, vérifié sur l'écran réellement rendu (et non
+ * seulement sur la fonction de tri) : c'est là que se joue le scénario 5 (cocher ne déplace pas
+ * la carte) et le scénario 10 (les habitudes ne sont pas réordonnées).
+ */
+describe('Planning — ordre des tâches du jour (US-038)', () => {
+	/** Noms des tâches affichées, dans l'ordre du DOM. */
+	function taskNames(): string[] {
+		const section = screen.getByRole('heading', { name: /Tâches/ }).closest(
+			'section'
+		) as HTMLElement;
+		return Array.from(section.querySelectorAll('.task-item .name')).map(
+			(el) => el.textContent ?? ''
+		);
+	}
+
+	/** Noms des habitudes affichées, dans l'ordre du DOM. */
+	function habitNames(): string[] {
+		const section = screen.getByRole('heading', { name: /Habitudes/ }).closest(
+			'section'
+		) as HTMLElement;
+		return Array.from(section.querySelectorAll('.habit-item .name')).map(
+			(el) => el.textContent ?? ''
+		);
+	}
+
+	/** Tâches du jour, déclarées dans un ordre de création volontairement non chronologique. */
+	const courses: Task = {
+		id: 'o1',
+		name: 'Courses',
+		date: today,
+		createdAt: today,
+		dueTime: '18:00'
+	};
+	const plombier: Task = {
+		id: 'o2',
+		name: 'Plombier',
+		date: today,
+		createdAt: today,
+		dueTime: '09:00'
+	};
+	const facture: Task = {
+		id: 'o3',
+		name: 'Facture',
+		date: today,
+		createdAt: today,
+		dueTime: '14:30'
+	};
+	const sansHeure: Task = { id: 'o4', name: 'Sans heure', date: today, createdAt: today };
+
+	beforeEach(async () => {
+		await idbSet('tasks', [courses, sansHeure, plombier, facture]);
+		tasksStore.loaded = false;
+	});
+
+	it('scénarios 1/2 — affiche les tâches par heure limite croissante, sans heure limite à la fin', async () => {
+		render(Page);
+		await screen.findByText('Plombier');
+
+		expect(taskNames()).toEqual(['Plombier', 'Facture', 'Courses', 'Sans heure']);
+	});
+
+	it('scénario 5 — cocher puis décocher une tâche ne la déplace pas', async () => {
+		render(Page);
+		await screen.findByText('Plombier');
+		const before = taskNames();
+
+		const checkbox = screen.getByLabelText('Marquer « Facture » comme faite');
+		await fireEvent.click(checkbox);
+		expect(taskNames()).toEqual(before);
+
+		await fireEvent.click(screen.getByLabelText('Marquer « Facture » comme faite'));
+		expect(taskNames()).toEqual(before);
+	});
+
+	it('scénario 10 — seules les tâches sont réordonnées, pas les habitudes', async () => {
+		render(Page);
+		await screen.findByText('Plombier');
+
+		// Ordre d'insertion des habitudes dans le stockage, strictement conservé.
+		expect(habitNames()).toEqual(["Boire de l'eau", 'Yoga']);
+	});
+
+	it('US-039 scénario 11 — une tâche urgente ajoutée depuis le planning apparaît en tête', async () => {
+		render(Page);
+		await screen.findByText('Plombier');
+
+		await fireEvent.click(screen.getByRole('button', { name: '+ Ajouter' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Nouvelle tâche' }));
+		await fireEvent.input(screen.getByLabelText('Nom'), { target: { value: 'Rappeler la banque' } });
+		await fireEvent.click(screen.getByLabelText('Urgente'));
+		await fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
+
+		await screen.findByText('Rappeler la banque');
+		expect(taskNames()[0]).toBe('Rappeler la banque');
+	});
+
+	it('US-039 scénario 9 — cocher une tâche urgente ne la déplace pas', async () => {
+		await idbSet('tasks', [
+			courses,
+			{ ...plombier, urgent: true },
+			facture,
+			{ ...sansHeure, urgent: true }
+		]);
+		tasksStore.loaded = false;
+
+		render(Page);
+		await screen.findByText('Plombier');
+		// Groupe urgent d'abord (sans heure limite en tête), puis les non urgentes.
+		expect(taskNames()).toEqual(['Sans heure', 'Plombier', 'Facture', 'Courses']);
+
+		await fireEvent.click(screen.getByLabelText('Marquer « Sans heure » comme faite'));
+
+		expect(taskNames()).toEqual(['Sans heure', 'Plombier', 'Facture', 'Courses']);
+	});
+});

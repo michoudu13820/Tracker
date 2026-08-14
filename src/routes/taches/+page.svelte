@@ -10,7 +10,7 @@
 	import { completionsStore } from '$lib/stores/completions.store.svelte';
 	import { resyncReminders } from '$lib/stores/resync-reminders';
 	import { toIsoDate } from '$lib/domain/dates';
-	import { visibleTasks } from '$lib/domain/tasks';
+	import { sortTasksByDateThenDay, visibleTasks } from '$lib/domain/tasks';
 	import type { IsoDate, Task } from '$lib/domain/types';
 	import { TaskItem, TaskForm } from '$lib/components';
 
@@ -65,10 +65,11 @@
 		await tasksStore.remove(taskId);
 	}
 
-	/** Tâches actives (US-014 : jamais les supprimées), triées par date pour une lecture chronologique. */
-	const sortedTasks = $derived(
-		[...visibleTasks(tasksStore.tasks)].sort((a, b) => a.date.localeCompare(b.date))
-	);
+	/** Tâches actives (US-014 : jamais les supprimées), triées par date pour une lecture
+	 * chronologique — puis, à date égale, selon exactement la même règle que le planning
+	 * (US-038 scénario 9 : heure limite croissante, sans heure limite ensuite, ordre de création
+	 * en départage). */
+	const sortedTasks = $derived(sortTasksByDateThenDay(visibleTasks(tasksStore.tasks)));
 </script>
 
 <svelte:head><title>Tracker — Tâches</title></svelte:head>

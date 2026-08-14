@@ -1,5 +1,6 @@
 import type { ColorThresholds, Habit, HabitCompletion, IsoDate, Task, TaskCompletion } from './types';
 import { isDueOn } from './occurrences';
+import { isHabitActive } from './habits';
 import { isTaskDone, tasksOn } from './tasks';
 import { addDays, addMonths, addYears, daysInMonth, startOfMonth, startOfWeek } from './dates';
 
@@ -69,6 +70,72 @@ export function habitCellStatus(
 ): HabitCellStatus {
 	if (!isDueOn(habit, date)) return 'not-due';
 	return isHabitDoneOn(completions, habit.id, date) ? 'done' : 'not-done';
+}
+
+/**
+ * État d'une cellule « habitude x jour » dans le langage à trois symboles du résumé (US-035) :
+ * `'done'` ✅, `'todo'` ⬜, `'missed'` ❌ et `'not-due'` (cellule neutre et vide).
+ *
+ * Extension du `HabitCellStatus` binaire d'US-005, à laquelle s'ajoutent **un axe temporel** et
+ * **deux garde-fous** — c'est tout ce qui distingue `'todo'` de `'missed'` :
+ * - axe temporel : un jour n'est « écoulé » qu'à partir du lendemain, donc **aujourd'hui reste
+ *   `'todo'` toute la journée**, y compris en soirée (scénario 3) ;
+ * - garde-fou « antériorité » : jamais de `'missed'` avant `createdAt`, l'habitude n'existait
+ *   pas encore (scénario 7) ;
+ * - garde-fou « statut » : jamais de `'missed'` pour une habitude en pause (US-015) ou
+ *   supprimée (US-013) — ses complétions réelles restent affichées en `'done'` (scénario 8).
+ */
+export type HabitCellState = 'done' | 'todo' | 'missed' | 'not-due';
+
+/** Libellés français des états de cellule, restitués aux lecteurs d'écran (US-035 scénario 13) :
+ * le symbole graphique n'est jamais la seule information portée par la cellule. */
+export const CELL_STATE_LABELS: Record<HabitCellState, string> = {
+	done: 'fait',
+	todo: 'à faire',
+	missed: 'manqué',
+	'not-due': 'non prévu'
+};
+
+/**
+ * État d'une cellule « habitude x jour » pour les vues semaine et mois (US-035). L'ordre des
+ * règles est significatif : une complétion réellement enregistrée l'emporte toujours (scénarios
+ * 1/8), puis les deux garde-fous neutralisent le `'missed'`, puis l'axe temporel tranche entre
+ * `'todo'` et `'missed'`.
+ *
+ * @param today jour courant réel (injecté pour rester pur et testable)
+ */
+export function habitCellState(
+	habit: Habit,
+	date: IsoDate,
+	completions: HabitCompletion[],
+	today: IsoDate
+): HabitCellState {
+	// Dérivé du statut binaire d'US-005 (lui-même déjà compatible cible chiffrée, US-019
+	// scénario 9) : cette US n'ajoute que la qualification du « non fait ».
+	const status = habitCellStatus(habit, date, completions);
+	if (status === 'not-due') return 'not-due'; // scénario 5
+	if (status === 'done') return 'done'; // scénarios 1/8 : l'historique réel l'emporte
+	if (!isHabitActive(habit)) return 'not-due'; // scénario 8 : ni ❌, ni injonction ⬜
+	if (date < habit.createdAt) return 'not-due'; // scénario 7
+	if (date >= today) return 'todo'; // scénarios 2/3/6 : la journée n'est écoulée que demain
+	return 'missed'; // scénario 4
+}
+
+/**
+ * État de lecture de la cellule « Tâches » d'un jour (US-035 scénario 12) : la valeur affichée
+ * reste le **pourcentage** (plus informatif qu'un état binaire, décision PO), mais la cellule
+ * adopte le même code à trois états en traitement de fond. `null` (aucune tâche ce jour-là)
+ * reste neutre, comme aujourd'hui.
+ */
+export function taskDayState(
+	percent: number | null,
+	date: IsoDate,
+	today: IsoDate
+): HabitCellState {
+	if (percent === null) return 'not-due';
+	if (percent >= 100) return 'done';
+	if (date >= today) return 'todo';
+	return 'missed';
 }
 
 /**
