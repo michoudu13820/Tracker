@@ -5,7 +5,7 @@ titre: Sur iPhone, taper dans un champ de saisie déclenche un zoom automatique 
 date: 2026-08-16
 auteur: qa
 statut: à corriger
-severite: mineur
+severite: majeur
 us_liee: []
 reproductible: toujours
 ---
@@ -14,8 +14,10 @@ reproductible: toujours
 
 ## Résumé
 Sur iPhone, appuyer sur **n'importe quel champ de saisie** de l'application ouvre bien le clavier,
-mais provoque **en plus un zoom automatique** de la page sur le champ ciblé. L'application donne
-alors l'impression d'un site web consulté dans un navigateur plutôt que d'une application mobile.
+mais provoque **en plus un zoom automatique** de la page sur le champ ciblé. Ce zoom **ne se retire
+pas à la fermeture du clavier** : l'application reste zoomée et l'utilisateur doit dézoomer à la
+main. L'application donne l'impression d'un site web consulté dans un navigateur plutôt que d'une
+application mobile.
 
 ## US / critère concerné
 **Aucune US ne formalise ce comportement** — `us_liee: []`.
@@ -58,28 +60,38 @@ Le clavier s'ouvre (attendu), **et** la page zoome automatiquement sur le champ 
 page grossit, le reste de l'écran sort du cadre. Le rendu évoque une page web dans un navigateur,
 pas une application mobile.
 
+**Le zoom ne se retire pas tout seul** (confirmé sur l'appareil par l'utilisateur le 2026-08-16) :
+une fois le clavier refermé, l'application **reste zoomée**, et c'est à l'utilisateur de dézoomer
+au pincement. La gêne n'est donc pas transitoire — elle persiste sur toute la navigation qui suit
+la saisie, sur tous les écrans, jusqu'à correction manuelle.
+
 ## Résultat attendu
 Appuyer sur un champ de saisie ouvre le clavier **sans aucun changement de niveau de zoom** : la
 mise en page reste strictement identique avant, pendant et après la saisie, sur tous les champs de
 l'application, comme dans une application iOS native.
 
+Exigence explicite de l'utilisateur (2026-08-16) : **aucun zoom automatique, jamais, sur aucun
+champ.** Un correctif qui ne ferait que « rendre le zoom moins fréquent » ou qui laisserait
+subsister quelques champs zoomants ne satisfait pas ce bug.
+
 Corollaire à ne pas casser en corrigeant : **le zoom manuel de l'utilisateur (pincement) doit rester
-possible** — c'est une fonction d'accessibilité. Seul le zoom *automatique et subi* au focus est en
-cause.
+possible** — c'est une fonction d'accessibilité, et c'est aujourd'hui le seul moyen dont dispose
+l'utilisateur pour réparer le défaut. Seul le zoom *automatique et subi* au focus est visé.
 
 ## Sévérité & impact
-**Mineur.** L'application reste pleinement utilisable, aucune donnée n'est en jeu et l'utilisateur
-peut dézoomer au pincement. Mais l'impact est **permanent et transverse** : il touche 100 % des
-saisies, sur tous les écrans, à chaque usage, et dégrade directement la perception « vraie app »
-recherchée par le projet — c'est d'ailleurs à ce titre que l'utilisateur le remonte.
+**Majeur.** Relevé de `mineur` à `majeur` le 2026-08-16, après vérification sur l'appareil : le
+zoom **persiste après la fermeture du clavier**. L'hypothèse basse (gêne transitoire, auto-annulée)
+est donc écartée.
 
-Ne pas monter en `majeur` sans avoir tranché le point ouvert ci-dessous.
+Conséquences :
+- l'application est laissée dans un état d'affichage dégradé **après chaque saisie**, écrans
+  suivants compris, et non pendant la seule saisie ;
+- le retour à un affichage correct exige une **action manuelle de l'utilisateur** (pincement) à
+  chaque fois — il n'existe aucun contournement automatique ;
+- le défaut touche 100 % des saisies, sur tous les écrans, à chaque usage, et dégrade directement
+  la perception « vraie app » recherchée par le projet.
 
-### Point ouvert à vérifier sur l'appareil (conditionne la sévérité)
-**Le zoom se dé-zoome-t-il tout seul une fois le clavier refermé ?** Non observé à ce jour.
-- Si oui → `mineur`, la gêne est transitoire (sévérité retenue par défaut).
-- Si non (la page reste zoomée après la saisie, obligeant à dézoomer à la main) → **`majeur`**, car
-  la gêne persiste alors sur toute la navigation qui suit.
+Aucune donnée n'est en jeu et l'application reste fonctionnelle : ce n'est pas `bloquant`.
 
 ## Notes / pistes
 Constat factuel relevé dans le code, sans valeur prescriptive — le correctif reste à l'appréciation
@@ -99,7 +111,10 @@ du développeur :
   symptôme.
 
 **Attente de recette** : la correction devra être vérifiée **sur iPhone réel**, aucun test
-automatisé du projet ne pouvant observer le zoom natif de WebKit (même limite que US-040). Rappel
+automatisé du projet ne pouvant observer le zoom natif de WebKit (même limite que US-040). Deux
+choses à contrôler, pas une : (1) **aucun zoom au focus** sur chacun des champs listés plus haut,
+et (2) **le niveau de zoom est identique avant et après la saisie** — c'est ce second point qui
+fait la sévérité `majeur`. Rappel
 opérationnel issu d'US-040 : sans `skipWaiting()`, une nouvelle version exige **deux ouvertures en
 ligne successives entrecoupées d'une fermeture complète de l'app** avant de prendre la main — sous
 peine de tester l'ancienne version en croyant tester la nouvelle.
