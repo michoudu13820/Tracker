@@ -137,3 +137,48 @@ peine de tester l'ancienne version en croyant tester la nouvelle.
   au vert dont 28 ajoutés par cette US.
 - Reste non couvert par l'automatisation : le cycle de vie réel d'un service worker (scénarios 1, 2
   et 6/6bis d'US-040) — Playwright n'est toujours pas installé sur le projet.
+
+## 2026-08-16 — US-041 : les tâches accomplies quittent la liste des tâches à faire
+
+- **Besoin** : les tâches cochées s'accumulaient dans le planning et l'onglet Tâches et noyaient ce
+  qu'il restait à faire. Elles sont désormais regroupées dans une section « Tâches accomplies »
+  **repliée par défaut**, avec son compteur lisible sans déplier, sur les deux écrans.
+- **Horizon de 7 jours, uniquement sur l'onglet Tâches** : cet écran agrège toutes les dates, donc
+  il se périme ; le planning montre un jour explicitement choisi et ne filtre **rien** (scénario 8).
+- **Rien n'est jamais supprimé** — exigence explicite de l'utilisateur. Le masquage est un choix
+  d'affichage : une tâche masquée de l'onglet Tâches reste consultable sur le planning de son jour.
+
+### Ce qui rend un masquage acceptable
+Trois arbitrages ont été tranchés avant implémentation ; le troisième est le seul contre-intuitif.
+
+| Point | Décision |
+|---|---|
+| État de la section entre deux affichages | **Toujours repliée** — le dépliage n'est pas mémorisé |
+| Point de départ des 7 jours | La **date d'accomplissement**, pas la date prévue : une tâche en retard cochée hier reste visible |
+| Tâches accomplies **sans** date d'accomplissement | **Masquées d'office** sur l'onglet Tâches |
+
+Masquer une donnée dont on ignore l'âge ne se défend que parce que le planning, lui, ne filtre
+rien : rien ne devient introuvable. Le nombre de tâches concernées est fini et ne peut que
+diminuer — le champ existe désormais, aucune nouvelle complétion n'est enregistrée sans date.
+
+### Deux critères déjà livrés amendés, pas contournés
+US-038 scénario 5 et US-039 scénario 9 posaient qu'une **tâche cochée ne se déplace pas**, pour
+éviter qu'un élément ne bouge sous le doigt. Cette US les contredit frontalement : la tâche cochée
+quitte la liste. Les tests n'ont pas été supprimés mais **réécrits sur ce que ces critères
+protégeaient réellement** — aucune des tâches *restantes* ne bouge, et une tâche décochée revient
+exactement à sa place. Garantie obtenue sans effort côté conception : `partitionByCompletion`
+conserve strictement l'ordre reçu dans chacun des deux groupes ; elle retire des éléments, elle
+n'en réordonne aucun.
+
+Toute la décision vit dans `$lib/domain/tasks` en fonctions pures — les écrans ne font que les
+appeler. La seule différence entre les deux écrans tient en une ligne : `/taches` compose
+`recentlyCompletedTasks` **après** `partitionByCompletion`, le planning s'arrête à la première.
+
+### État
+- US-041 **livrée**. Commit `4acbb52`, run CI `31940458184` vert (typecheck / 684 tests dont 24
+  ajoutés / build + déploiement Netlify).
+- Conséquence d'usage à surveiller : sur l'onglet Tâches, une tâche cochée par erreur disparaît
+  immédiatement et la récupérer suppose de déplier la section. C'est le prix du besoin exprimé,
+  mais c'est le point le plus susceptible de déplaire à l'usage.
+- Dette connexe repérée au passage, hors périmètre : le `README.md` n'a pas bougé depuis le
+  scaffold du 2026-08-11 et ne décrit **aucune** des 41 US livrées.
