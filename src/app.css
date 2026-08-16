@@ -152,6 +152,29 @@
 	box-sizing: border-box;
 }
 
+/**
+ * Champs de saisie — plancher de taille de texte (BUG-003).
+ *
+ * Safari iOS zoome automatiquement la page au focus d'un champ dont le texte fait moins de 16 px,
+ * et ce zoom ne se retire pas à la fermeture du clavier : l'app reste zoomée jusqu'à ce que
+ * l'utilisateur dézoome au pincement. Les contrôles de formulaire n'héritant pas de la taille de
+ * texte du `body`, ils retombaient sur la valeur par défaut de WebKit (~13 px) — donc sous le
+ * seuil, sur TOUS les écrans.
+ *
+ * 16 px est la valeur seuil elle-même, exprimée en pixels à dessein : c'est une contrainte du
+ * moteur, pas un choix typographique, et elle ne doit pas suivre une éventuelle mise à l'échelle
+ * des `rem`. Corollaire à préserver : le zoom manuel (pincement) reste autorisé — le viewport ne
+ * déclare ni `user-scalable=no` ni `maximum-scale`, seul le zoom SUBI est corrigé.
+ *
+ * Vérifié par `src/app.css.test.ts`, qui contrôle aussi qu'aucun composant ne repasse sous ce
+ * plancher : une règle scopée Svelte est plus spécifique et neutraliserait celle-ci sur son écran.
+ */
+input,
+select,
+textarea {
+	font-size: 16px;
+}
+
 html,
 body {
 	margin: 0;

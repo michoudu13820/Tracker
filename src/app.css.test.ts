@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { CARD_COLORS, DEFAULT_CARD_COLOR } from '$lib/domain/card-colors';
 
@@ -178,5 +178,123 @@ describe('Palette de couleurs de carte (US-036)', () => {
 		expect(darkVars['--success-bg']).toBe('#1f3a28');
 		expect(darkVars['--danger-bg']).toBe('#3a1f28');
 		expect(darkVars['--warning-bg']).toBe('#3a3018');
+	});
+});
+
+/* ----------------------------------------------------------------------------------------------
+   BUG-003 — zoom automatique au focus d'un champ sur iPhone.
+
+   Safari iOS zoome la page au focus d'un champ de saisie dont le texte fait MOINS de 16 px, et le
+   zoom ne se retire pas à la fermeture du clavier : l'app reste zoomée. La règle est donc binaire
+   et vérifiable statiquement — d'où ces tests sur la source CSS, à la manière de ceux d'US-029/
+   US-036 ci-dessus (le zoom natif de WebKit n'étant, lui, pas observable en jsdom).
+
+   Deux garanties, complémentaires :
+    1. `app.css` impose un plancher global à tous les champs ;
+    2. AUCUN composant ne repasse sous ce plancher — une règle scopée Svelte est plus spécifique
+       que la règle globale et la neutraliserait silencieusement sur son écran.
+   -------------------------------------------------------------------------------------------- */
+
+/** Taille de texte en dessous de laquelle Safari iOS zoome au focus d'un champ. */
+const IOS_MIN_FIELD_FONT_PX = 16;
+
+/** Champs de saisie concernés : ceux qui ouvrent le clavier ou un sélecteur natif. */
+const FIELD_ELEMENTS = ['input', 'select', 'textarea'] as const;
+
+/**
+ * Types d'`input` hors sujet : ils n'ouvrent pas de clavier, ne déclenchent donc aucun zoom, et
+ * sont volontairement dimensionnés à la main dans l'app (interrupteurs, quantièmes, pastilles).
+ */
+const NON_TEXT_INPUT = /\[type=['"]?(checkbox|radio|range|color|file)['"]?\]/;
+
+/** `input`/`select`/`textarea` en tant qu'ÉLÉMENT, jamais en tant que morceau de nom de classe. */
+const FIELD_ELEMENT_TOKEN = new RegExp(`(^|[\\s>+~(])(${FIELD_ELEMENTS.join('|')})(?![\\w-])`);
+
+/** Convertit une valeur de `font-size` en pixels ; `undefined` si l'unité n'est pas comparable. */
+function fontSizeInPx(value: string): number | undefined {
+	const m = value.trim().match(/^(\d*\.?\d+)(px|rem)$/);
+	if (!m) return undefined;
+	return m[2] === 'rem' ? Number(m[1]) * 16 : Number(m[1]);
+}
+
+/**
+ * Règles `sélecteur { déclarations }` d'une feuille de style. Le motif ne traversant pas les
+ * accolades, les règles imbriquées (`@media`) sont capturées telles quelles, l'enrobage ignoré —
+ * suffisant ici, où seul le couple sélecteur/`font-size` nous intéresse.
+ */
+function rulesOf(stylesheet: string): { selector: string; declarations: string }[] {
+	const withoutComments = stylesheet.replace(/\/\*[\s\S]*?\*\//g, '');
+	return [...withoutComments.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+		selector: m[1].trim(),
+		declarations: m[2]
+	}));
+}
+
+/** `font-size` déclarée par une règle, en pixels ; `undefined` si la règle n'en déclare pas. */
+function declaredFontSizePx(declarations: string): number | undefined {
+	const raw = [...declarations.matchAll(/(?:^|;)\s*font-size\s*:\s*([^;]+)/g)].at(-1)?.[1];
+	return raw === undefined ? undefined : fontSizeInPx(raw);
+}
+
+/** Sélecteurs d'une liste `a, b` qui ciblent un champ de saisie ouvrant un clavier. */
+function fieldSelectors(selector: string): string[] {
+	return selector
+		.split(',')
+		.map((s) => s.trim())
+		.filter((s) => FIELD_ELEMENT_TOKEN.test(s) && !NON_TEXT_INPUT.test(s));
+}
+
+const srcDir = fileURLToPath(new URL('.', import.meta.url));
+const svelteFiles = readdirSync(srcDir, { recursive: true, encoding: 'utf-8' })
+	.filter((f) => f.endsWith('.svelte'))
+	.sort();
+
+describe('Zoom au focus des champs de saisie sur iOS (BUG-003)', () => {
+	it('app.css impose à tout champ de saisie une taille de texte >= 16px', () => {
+		// Le défaut d'origine : aucune règle de `app.css` ne visait `input`/`select`/`textarea`,
+		// qui retombaient donc sur la taille par défaut de WebKit (~13px) et zoomaient au focus.
+		for (const element of FIELD_ELEMENTS) {
+			const sizes = rulesOf(css)
+				.filter((r) => r.selector.split(',').some((s) => s.trim() === element))
+				.map((r) => declaredFontSizePx(r.declarations))
+				.filter((px): px is number => px !== undefined);
+
+			expect(sizes, `aucune règle globale ne fixe la taille de texte de <${element}>`).not.toEqual(
+				[]
+			);
+			for (const px of sizes) {
+				expect(px, `<${element}> : ${px}px`).toBeGreaterThanOrEqual(IOS_MIN_FIELD_FONT_PX);
+			}
+		}
+	});
+
+	it('aucun composant ne repasse un champ sous ce plancher (la règle scopée gagnerait)', () => {
+		const offenders: string[] = [];
+
+		for (const file of svelteFiles) {
+			const source = readFileSync(new URL(file.replaceAll('\\', '/'), import.meta.url), 'utf-8');
+			for (const style of source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)) {
+				for (const rule of rulesOf(style[1])) {
+					const px = declaredFontSizePx(rule.declarations);
+					if (px === undefined || px >= IOS_MIN_FIELD_FONT_PX) continue;
+					for (const selector of fieldSelectors(rule.selector)) {
+						offenders.push(`${file} — "${selector}" : ${px}px`);
+					}
+				}
+			}
+		}
+
+		expect(offenders).toEqual([]);
+	});
+
+	it("laisse le zoom manuel possible : le viewport n'interdit pas le pincement", () => {
+		// Corollaire d'accessibilité posé par la fiche BUG-003 : on corrige le zoom SUBI, on ne
+		// confisque pas le zoom VOULU. `user-scalable=no` / `maximum-scale` sont donc proscrits.
+		const appHtml = readFileSync(fileURLToPath(new URL('./app.html', import.meta.url)), 'utf-8');
+		const viewport = appHtml.match(/<meta name="viewport" content="([^"]*)"/)?.[1] ?? '';
+
+		expect(viewport).not.toBe('');
+		expect(viewport).not.toMatch(/user-scalable\s*=\s*no/);
+		expect(viewport).not.toMatch(/maximum-scale/);
 	});
 });
