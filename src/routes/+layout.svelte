@@ -7,6 +7,7 @@
 	import { tasksStore } from '$lib/stores/tasks.store.svelte';
 	import { completionsStore } from '$lib/stores/completions.store.svelte';
 	import { remindersStore } from '$lib/stores/reminders.store.svelte';
+	import { watchReconnection } from '$lib/stores/reminders-reconnect';
 	import { updateBadge } from '$lib/stores/update-badge';
 	import { applyFontChoice } from '$lib/fonts/client';
 	import { toIsoDate } from '$lib/domain/dates';
@@ -64,11 +65,20 @@
 			await updateBadge();
 		})();
 
+		// US-040 scénario 7 : une action de rappel effectuée hors ligne (activation, coupure,
+		// changement d'heure) est rejouée automatiquement dès le retour de la connexion, sans
+		// action de l'utilisateur. Complète la resynchronisation déjà faite à chaque ouverture
+		// ci-dessus, qui couvre le cas « app rouverte alors que le réseau est revenu ».
+		const stopWatchingReconnection = watchReconnection();
+
 		function handleVisibilityChange() {
 			if (document.hidden) void updateBadge();
 		}
 		document.addEventListener('visibilitychange', handleVisibilityChange);
-		return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+		return () => {
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+			stopWatchingReconnection();
+		};
 	});
 </script>
 

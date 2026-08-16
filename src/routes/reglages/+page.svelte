@@ -71,6 +71,14 @@
 				completionsStore.taskCompletions,
 				settingsStore.weeklyReview ?? undefined
 			);
+			if (!subscription && remindersStore.pendingServerSync) {
+				// US-040 scénario 7 : hors ligne, la souscription push est impossible (elle a besoin
+				// du réseau) mais l'intention est valable. On persiste la préférence pour que
+				// `flushPendingReminders` la réalise au retour du réseau. Pas d'`enableError` ici :
+				// ce n'est pas un refus, et le formulaire affiche déjà l'état « en attente ».
+				await settingsStore.saveReminder({ ...current, enabled: true });
+				return;
+			}
 			if (!subscription) {
 				// Scénario 5 : refus (ou impossibilité) — état visible, rien n'est activé silencieusement.
 				enableError =
@@ -163,6 +171,8 @@
 		settings={settingsStore.reminder}
 		{enabling}
 		{enableError}
+		pendingSync={remindersStore.pendingServerSync}
+		syncFailed={remindersStore.syncStatus === 'error'}
 		onToggle={handleToggleReminders}
 		onTimeChange={handleTimeChange}
 	/>

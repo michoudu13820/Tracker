@@ -25,12 +25,32 @@
 		enabling: boolean;
 		/** Message d'erreur explicite si l'activation a échoué (scénario 5), sinon null. */
 		enableError: string | null;
+		/**
+		 * Vrai quand le réglage est enregistré localement mais pas encore appliqué côté serveur,
+		 * faute de réseau (US-040 scénario 7). Sans ce signal, l'utilisateur croirait son rappel
+		 * déjà actif.
+		 */
+		pendingSync?: boolean;
+		/**
+		 * Vrai quand la transmission au serveur a échoué alors que le réseau était disponible
+		 * (US-040 scénario 7, dernier critère) : échec définitif, pas une mise en attente.
+		 */
+		syncFailed?: boolean;
 		onToggle: (nextEnabled: boolean) => void;
 		onTimeChange: (time: string) => void;
 	}
 
-	let { availability, permission, settings, enabling, enableError, onToggle, onTimeChange }: Props =
-		$props();
+	let {
+		availability,
+		permission,
+		settings,
+		enabling,
+		enableError,
+		pendingSync = false,
+		syncFailed = false,
+		onToggle,
+		onTimeChange
+	}: Props = $props();
 
 	function handleToggle(e: Event) {
 		onToggle((e.target as HTMLInputElement).checked);
@@ -78,6 +98,16 @@
 		</p>
 	{:else if enableError}
 		<p class="error" role="alert">{enableError}</p>
+	{:else if pendingSync}
+		<p class="pending" role="status">
+			Tu es hors connexion : ce réglage est enregistré et sera appliqué automatiquement au
+			retour du réseau. Le rappel n'est pas encore actif.
+		</p>
+	{:else if syncFailed}
+		<p class="error" role="alert">
+			Ce réglage n'a pas pu être transmis : le rappel n'est pas actif pour l'instant. Il sera
+			retenté à la prochaine ouverture de l'application.
+		</p>
 	{/if}
 
 	<div class="field">
@@ -140,6 +170,11 @@
 	}
 	.error {
 		color: var(--danger-text);
+		margin: 0 0 0.75rem;
+		font-size: 0.85rem;
+	}
+	.pending {
+		color: var(--muted);
 		margin: 0 0 0.75rem;
 		font-size: 0.85rem;
 	}

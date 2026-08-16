@@ -12,6 +12,7 @@ import {
 	computeWeeklyReviewWindow
 } from '$lib/domain/reminders';
 import { defaultPushClient, type PushClient } from '$lib/push/client';
+import { isOffline as defaultIsOffline } from '$lib/offline/connectivity';
 
 /**
  * Orchestration RUNTIME des rappels Web Push (US-007) — état lié à l'appareil/navigateur,
@@ -33,14 +34,39 @@ export type PushAvailability =
 
 export class RemindersStore {
 	#client: PushClient;
+	#isOffline: () => boolean;
 
 	/** Souscription active (null tant que non abonné / refusé). */
 	subscription = $state<PushSubscription | null>(null);
-	/** Dernier résultat de synchronisation de la fenêtre au serveur. */
-	syncStatus = $state<'idle' | 'syncing' | 'ok' | 'error'>('idle');
+	/**
+	 * Dernier résultat de synchronisation de la fenêtre au serveur.
+	 *
+	 * `pending` (US-040 scénario 7) se distingue d'`error` : l'intention est comprise et sera
+	 * rejouée automatiquement au retour du réseau, alors qu'`error` signale un échec définitif
+	 * que l'utilisateur doit connaître — sans quoi il croirait son rappel actif à tort.
+	 */
+	syncStatus = $state<'idle' | 'syncing' | 'ok' | 'error' | 'pending'>('idle');
+	/** Vrai tant qu'une intention attend le retour du réseau pour être appliquée côté serveur. */
+	pendingServerSync = $state(false);
 
-	constructor(client: PushClient = defaultPushClient) {
+	constructor(client: PushClient = defaultPushClient, isOffline: () => boolean = defaultIsOffline) {
 		this.#client = client;
+		this.#isOffline = isOffline;
+	}
+
+	/**
+	 * Qualifie l'échec d'un appel serveur : hors ligne → à rejouer plus tard ; en ligne → échec
+	 * définitif à signaler. Centralisé pour que les trois actions (activer, désactiver, changer
+	 * l'heure) se comportent identiquement.
+	 */
+	#recordFailure(): 'pending' | 'error' {
+		if (this.#isOffline()) {
+			this.pendingServerSync = true;
+			this.syncStatus = 'pending';
+			return 'pending';
+		}
+		this.syncStatus = 'error';
+		return 'error';
 	}
 
 	/** Disponibilité courante du push selon l'environnement (US-007 scénario 3bis). */
@@ -84,7 +110,17 @@ export class RemindersStore {
 		taskCompletions: TaskCompletion[] = [],
 		weeklyReview?: WeeklyReviewSettings
 	): Promise<PushSubscription | null> {
-		const sub = await this.#client.subscribe();
+		let sub: PushSubscription | null;
+		try {
+			sub = await this.#client.subscribe();
+		} catch (error) {
+			// US-040 scénario 7 : la souscription elle-même a besoin du réseau (elle contacte le
+			// service de push). Hors ligne, on retient l'intention plutôt que d'échouer — la
+			// préférence « rappels activés » est persistée localement par l'appelant, et
+			// `flushPendingReminders` réessaiera la souscription au retour du réseau.
+			if (this.#recordFailure() === 'pending') return null;
+			throw error;
+		}
 		this.subscription = sub;
 		if (sub) await this.sync(habits, settings, completions, tasks, taskCompletions, weeklyReview);
 		return sub;
@@ -95,8 +131,17 @@ export class RemindersStore {
 	 * souscription entière étant supprimée. */
 	async disable(): Promise<void> {
 		if (!this.subscription) return;
-		await this.#client.unsubscribe(this.subscription);
+		try {
+			await this.#client.unsubscribe(this.subscription);
+		} catch (error) {
+			// US-040 scénario 7 : hors ligne, on CONSERVE volontairement la souscription. La
+			// supprimer localement rendrait la coupure impossible à propager, et le serveur
+			// continuerait d'envoyer des rappels sans qu'on puisse jamais le lui dire.
+			if (this.#recordFailure() === 'pending') return;
+			throw error;
+		}
 		this.subscription = null;
+		this.pendingServerSync = false;
 	}
 
 	/**
@@ -125,8 +170,9 @@ export class RemindersStore {
 				: [];
 			await this.#client.pushSchedule(this.subscription, window, taskWindow, weeklyReviewWindow);
 			this.syncStatus = 'ok';
+			this.pendingServerSync = false;
 		} catch {
-			this.syncStatus = 'error';
+			this.#recordFailure();
 		}
 	}
 }

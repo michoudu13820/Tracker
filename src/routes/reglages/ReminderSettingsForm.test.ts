@@ -124,4 +124,38 @@ describe('ReminderSettingsForm (US-007)', () => {
 
 		expect(onTimeChange).toHaveBeenCalledWith('20:30');
 	});
+
+	it("US-040 scénario 7 — hors ligne : le réglage est annoncé comme en attente, pas comme actif", async () => {
+		render(ReminderSettingsForm, {
+			availability: 'available',
+			permission: 'granted',
+			settings: { ...settings, enabled: true },
+			enabling: false,
+			enableError: null,
+			pendingSync: true,
+			onToggle: vi.fn(),
+			onTimeChange: vi.fn()
+		});
+
+		const status = screen.getByRole('status');
+		expect(status).toHaveTextContent(/hors connexion/i);
+		expect(status).toHaveTextContent(/retour du réseau/i);
+		// L'exigence tient dans cette phrase : sans elle, l'utilisateur croirait son rappel actif.
+		expect(status).toHaveTextContent(/pas encore actif/i);
+	});
+
+	it("US-040 scénario 7 — échec définitif : l'utilisateur est averti que le rappel n'est pas actif", async () => {
+		render(ReminderSettingsForm, {
+			availability: 'available',
+			permission: 'granted',
+			settings: { ...settings, enabled: true },
+			enabling: false,
+			enableError: null,
+			syncFailed: true,
+			onToggle: vi.fn(),
+			onTimeChange: vi.fn()
+		});
+
+		expect(screen.getByRole('alert')).toHaveTextContent(/n'est pas actif/i);
+	});
 });

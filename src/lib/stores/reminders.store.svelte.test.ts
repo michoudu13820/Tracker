@@ -268,3 +268,93 @@ describe('RemindersStore — revue hebdomadaire poussée (US-028)', () => {
 		expect(client.scheduled.at(-1)?.weeklyReviewReminders).toEqual([]);
 	});
 });
+
+/**
+ * US-040 scénario 7 — une action de rappel effectuée hors ligne est retenue et rejouée, mais un
+ * échec survenu EN LIGNE reste un échec définitif qu'il faut signaler. C'est cette distinction
+ * que couvre ce bloc : `pending` (sera appliqué) vs `error` (ne le sera pas tout seul).
+ */
+describe('RemindersStore hors connexion (US-040 scénario 7)', () => {
+	/** Store dont le client échoue sur les appels réseau, avec un état de connexion contrôlé. */
+	function offlineStore(offline: boolean, overrides: Partial<PushClient> = {}) {
+		const client = fakeClient({
+			pushSchedule: vi.fn(async () => {
+				throw new TypeError('Failed to fetch');
+			}),
+			...overrides
+		});
+		return { client, store: new RemindersStore(client, () => offline) };
+	}
+
+	it("met l'intention en attente quand la synchronisation échoue hors ligne", async () => {
+		const { store } = offlineStore(true);
+		store.subscription = fakeSubscription();
+
+		await store.sync([habit], settingsEnabled);
+
+		expect(store.syncStatus).toBe('pending');
+		expect(store.pendingServerSync).toBe(true);
+	});
+
+	it('signale un échec définitif quand la synchronisation échoue alors que le réseau est là', async () => {
+		const { store } = offlineStore(false);
+		store.subscription = fakeSubscription();
+
+		await store.sync([habit], settingsEnabled);
+
+		expect(store.syncStatus).toBe('error');
+		expect(store.pendingServerSync).toBe(false);
+	});
+
+	it("retient l'activation demandée hors ligne, la souscription étant impossible sans réseau", async () => {
+		const { store } = offlineStore(true, {
+			subscribe: vi.fn(async () => {
+				throw new TypeError('Failed to fetch');
+			})
+		});
+
+		const subscription = await store.enable([habit], settingsEnabled);
+
+		expect(subscription).toBeNull();
+		expect(store.pendingServerSync).toBe(true);
+	});
+
+	it('conserve la souscription quand la coupure demandée hors ligne ne peut pas être transmise', async () => {
+		// La supprimer localement rendrait la coupure impossible à propager : le serveur
+		// continuerait d'envoyer des rappels sans qu'on puisse jamais le lui dire.
+		const { store } = offlineStore(true, {
+			unsubscribe: vi.fn(async () => {
+				throw new TypeError('Failed to fetch');
+			})
+		});
+		store.subscription = fakeSubscription();
+
+		await store.disable();
+
+		expect(store.subscription).not.toBeNull();
+		expect(store.pendingServerSync).toBe(true);
+	});
+
+	it("lève l'erreur telle quelle si la coupure échoue alors que le réseau est disponible", async () => {
+		const { store } = offlineStore(false, {
+			unsubscribe: vi.fn(async () => {
+				throw new TypeError('Serveur indisponible');
+			})
+		});
+		store.subscription = fakeSubscription();
+
+		await expect(store.disable()).rejects.toThrow('Serveur indisponible');
+	});
+
+	it("lève l'attente dès qu'une synchronisation réussit", async () => {
+		const client = fakeClient();
+		const store = new RemindersStore(client, () => false);
+		store.subscription = fakeSubscription();
+		store.pendingServerSync = true;
+
+		await store.sync([habit], settingsEnabled);
+
+		expect(store.syncStatus).toBe('ok');
+		expect(store.pendingServerSync).toBe(false);
+	});
+});
