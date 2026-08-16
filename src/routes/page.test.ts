@@ -417,16 +417,20 @@ describe('Planning — ordre des tâches du jour (US-038)', () => {
 		expect(taskNames()).toEqual(['Plombier', 'Facture', 'Courses', 'Sans heure']);
 	});
 
-	it('scénario 5 — cocher puis décocher une tâche ne la déplace pas', async () => {
+	it('scénario 5 — cocher une tâche ne réordonne pas les autres, la décocher la remet à sa place', async () => {
+		// Amendé par US-041 : cocher une tâche la fait désormais QUITTER la liste des tâches à
+		// faire (elle rejoint la section « Tâches accomplies », repliée par défaut). L'invariant
+		// que défendaient US-038 scénario 5 et US-039 scénario 9 reste vérifié sur ce qui subsiste :
+		// aucune des autres tâches ne bouge, et la tâche décochée revient exactement à sa place.
 		render(Page);
 		await screen.findByText('Plombier');
 		const before = taskNames();
 
-		const checkbox = screen.getByLabelText('Marquer « Facture » comme faite');
-		await fireEvent.click(checkbox);
-		expect(taskNames()).toEqual(before);
-
 		await fireEvent.click(screen.getByLabelText('Marquer « Facture » comme faite'));
+		expect(taskNames()).toEqual(before.filter((name) => name !== 'Facture'));
+
+		await fireEvent.click(screen.getByRole('button', { name: /Tâches accomplies/ }));
+		await fireEvent.click(await screen.findByLabelText('Marquer « Facture » comme faite'));
 		expect(taskNames()).toEqual(before);
 	});
 
@@ -468,6 +472,62 @@ describe('Planning — ordre des tâches du jour (US-038)', () => {
 
 		await fireEvent.click(screen.getByLabelText('Marquer « Sans heure » comme faite'));
 
-		expect(taskNames()).toEqual(['Sans heure', 'Plombier', 'Facture', 'Courses']);
+		// Amendé par US-041 : la tâche cochée quitte la liste. Les urgentes restantes conservent
+		// leur rang, ce qui est ce que le scénario 9 garantissait réellement.
+		expect(taskNames()).toEqual(['Plombier', 'Facture', 'Courses']);
+	});
+});
+
+/**
+ * US-041 — sur le planning, les tâches accomplies du jour affiché sont regroupées dans une
+ * section repliée. Aucun horizon temporel ici, contrairement à `/taches` (scénario 8).
+ */
+describe('Planning — section « Tâches accomplies » (US-041)', () => {
+	it('scénario 1 — la section est repliée par défaut et annonce son nombre', async () => {
+		await idbSet('task-completions', [{ taskId: 't1', done: true, doneAt: today }]);
+		completionsStore.loaded = false;
+		tasksStore.loaded = false;
+
+		render(Page);
+		// On attend l'état stabilisé de la liste des tâches à faire — devenue vide, la seule
+		// tâche du jour étant accomplie — plutôt que le seul rendu de la section.
+		await screen.findByText('Tout est fait pour ce jour.');
+
+		expect(screen.queryByText('Appeler le plombier')).not.toBeInTheDocument();
+		const toggle = screen.getByRole('button', { name: /Tâches accomplies/ });
+		expect(toggle).toHaveAttribute('aria-expanded', 'false');
+		expect(toggle).toHaveTextContent('1');
+	});
+
+	it('scénario 3 — cocher une tâche la fait passer dans la section accomplies', async () => {
+		render(Page);
+		await screen.findByText('Appeler le plombier');
+		expect(screen.queryByRole('button', { name: /Tâches accomplies/ })).not.toBeInTheDocument();
+
+		await fireEvent.click(screen.getByLabelText('Marquer « Appeler le plombier » comme faite'));
+
+		expect(screen.queryByText('Appeler le plombier')).not.toBeInTheDocument();
+		expect(await screen.findByRole('button', { name: /Tâches accomplies/ })).toBeInTheDocument();
+	});
+
+	it('scénario 4 — sans tâche accomplie, aucune section vide n’est rendue', async () => {
+		render(Page);
+		await screen.findByText('Appeler le plombier');
+
+		expect(screen.queryByRole('button', { name: /Tâches accomplies/ })).not.toBeInTheDocument();
+	});
+
+	it("scénario 8 — le planning n'applique aucun horizon de 7 jours", async () => {
+		// Exactement la donnée qui serait masquée sur `/taches` (accomplie il y a des mois) : ici
+		// elle doit rester visible, le planning montrant un jour explicitement choisi. C'est ce
+		// qui rend le masquage de l'autre écran acceptable — rien ne devient introuvable.
+		await idbSet('task-completions', [{ taskId: 't1', done: true, doneAt: '2026-01-15' }]);
+		completionsStore.loaded = false;
+		tasksStore.loaded = false;
+
+		render(Page);
+		await fireEvent.click(await screen.findByRole('button', { name: /Tâches accomplies/ }));
+
+		expect(await screen.findByText('Appeler le plombier')).toBeInTheDocument();
 	});
 });

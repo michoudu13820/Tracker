@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
+	COMPLETED_TASKS_VISIBLE_DAYS,
 	draftToTaskColor,
 	draftToUrgent,
+	isRecentCompletion,
 	isTaskDeleted,
 	isTaskOverdue,
 	isTaskUrgent,
+	partitionByCompletion,
+	recentlyCompletedTasks,
 	sortTasksByDateThenDay,
 	sortTasksForDay,
 	taskColorToDraft,
@@ -16,7 +20,7 @@ import {
 	visibleTasks
 } from './tasks';
 import { DEFAULT_CARD_COLOR } from './card-colors';
-import type { IsoDate, Task } from './types';
+import type { IsoDate, Task, TaskCompletion } from './types';
 
 const task: Task = {
 	id: 't1',
@@ -425,5 +429,130 @@ describe('Couleur de carte d’une tâche (US-037)', () => {
 
 	it('scénario 2 — persiste toute autre teinte choisie', () => {
 		expect(draftToTaskColor({ name: 'x', date: '2026-08-20', color: 'ciel' })).toBe('ciel');
+	});
+});
+
+describe('Regroupement des tâches accomplies (US-041)', () => {
+	const task = (id: string, overrides: Partial<Task> = {}): Task => ({
+		id,
+		name: `Tâche ${id}`,
+		date: '2026-08-16',
+		createdAt: '2026-08-01',
+		...overrides
+	});
+
+	describe('partitionByCompletion', () => {
+		it('scénario 1 — sépare les tâches à faire des tâches accomplies', () => {
+			const tasks = [task('a'), task('b'), task('c')];
+			const completions: TaskCompletion[] = [{ taskId: 'b', done: true, doneAt: '2026-08-16' }];
+
+			const { pending, completed } = partitionByCompletion(tasks, completions);
+
+			expect(pending.map((t) => t.id)).toEqual(['a', 'c']);
+			expect(completed.map((t) => t.id)).toEqual(['b']);
+		});
+
+		it("préserve strictement l'ordre reçu dans chaque groupe (non-régression US-038/US-039)", () => {
+			// L'ordre entrant est celui produit par le tri d'US-038/US-039. Le regroupement retire
+			// des éléments, il n'en réordonne aucun — c'est le principal risque de cette US.
+			const tasks = [task('urgente'), task('a-9h'), task('b-14h'), task('sans-heure')];
+			const completions: TaskCompletion[] = [{ taskId: 'a-9h', done: true, doneAt: '2026-08-16' }];
+
+			const { pending, completed } = partitionByCompletion(tasks, completions);
+
+			expect(pending.map((t) => t.id)).toEqual(['urgente', 'b-14h', 'sans-heure']);
+			expect(completed.map((t) => t.id)).toEqual(['a-9h']);
+		});
+
+		it('une complétion décochée compte comme « à faire »', () => {
+			const completions: TaskCompletion[] = [{ taskId: 'a', done: false, doneAt: '2026-08-16' }];
+
+			const { pending, completed } = partitionByCompletion([task('a')], completions);
+
+			expect(pending.map((t) => t.id)).toEqual(['a']);
+			expect(completed).toEqual([]);
+		});
+
+		it('sans aucune complétion, tout reste à faire', () => {
+			const { pending, completed } = partitionByCompletion([task('a'), task('b')], []);
+
+			expect(pending).toHaveLength(2);
+			expect(completed).toEqual([]);
+		});
+	});
+
+	describe('isRecentCompletion (scénario 6)', () => {
+		const today = '2026-08-16';
+
+		it('accomplie le jour même : récente', () => {
+			expect(isRecentCompletion({ taskId: 'a', done: true, doneAt: today }, today, 7)).toBe(true);
+		});
+
+		it('accomplie il y a exactement 7 jours : encore visible', () => {
+			expect(
+				isRecentCompletion({ taskId: 'a', done: true, doneAt: '2026-08-09' }, today, 7)
+			).toBe(true);
+		});
+
+		it('accomplie il y a 8 jours : masquée', () => {
+			expect(
+				isRecentCompletion({ taskId: 'a', done: true, doneAt: '2026-08-08' }, today, 7)
+			).toBe(false);
+		});
+
+		it('scénario 9 — sans date d’accomplissement : considérée ancienne, donc masquée', () => {
+			expect(isRecentCompletion({ taskId: 'a', done: true }, today, 7)).toBe(false);
+		});
+
+		it('une tâche non cochée n’est jamais une complétion récente', () => {
+			expect(
+				isRecentCompletion({ taskId: 'a', done: false, doneAt: today }, today, 7)
+			).toBe(false);
+		});
+
+		it('sans complétion du tout : faux, sans lever d’erreur', () => {
+			expect(isRecentCompletion(undefined, today, 7)).toBe(false);
+		});
+	});
+
+	describe('recentlyCompletedTasks (scénarios 6/9)', () => {
+		const today = '2026-08-16';
+
+		it('ne garde que les tâches accomplies au cours des 7 derniers jours', () => {
+			const tasks = [task('recente'), task('ancienne'), task('sans-date')];
+			const completions: TaskCompletion[] = [
+				{ taskId: 'recente', done: true, doneAt: '2026-08-14' },
+				{ taskId: 'ancienne', done: true, doneAt: '2026-07-30' },
+				{ taskId: 'sans-date', done: true }
+			];
+
+			const visible = recentlyCompletedTasks(tasks, completions, today);
+
+			expect(visible.map((t) => t.id)).toEqual(['recente']);
+		});
+
+		it("le seuil se compte depuis l'accomplissement, pas depuis la date prévue de la tâche", () => {
+			// Tâche très en retard, mais cochée hier : elle doit rester visible (arbitrage 2026-08-16).
+			const enRetard = task('vieille-tache', { date: '2026-06-01' });
+			const completions: TaskCompletion[] = [
+				{ taskId: 'vieille-tache', done: true, doneAt: '2026-08-15' }
+			];
+
+			expect(recentlyCompletedTasks([enRetard], completions, today).map((t) => t.id)).toEqual([
+				'vieille-tache'
+			]);
+		});
+
+		it('applique le seuil fixe de 7 jours par défaut', () => {
+			expect(COMPLETED_TASKS_VISIBLE_DAYS).toBe(7);
+			const completions: TaskCompletion[] = [
+				{ taskId: 'a', done: true, doneAt: '2026-08-09' },
+				{ taskId: 'b', done: true, doneAt: '2026-08-08' }
+			];
+
+			const visible = recentlyCompletedTasks([task('a'), task('b')], completions, today);
+
+			expect(visible.map((t) => t.id)).toEqual(['a']);
+		});
 	});
 });

@@ -10,9 +10,14 @@
 	import { completionsStore } from '$lib/stores/completions.store.svelte';
 	import { resyncReminders } from '$lib/stores/resync-reminders';
 	import { toIsoDate } from '$lib/domain/dates';
-	import { sortTasksByDateThenDay, visibleTasks } from '$lib/domain/tasks';
+	import {
+		partitionByCompletion,
+		recentlyCompletedTasks,
+		sortTasksByDateThenDay,
+		visibleTasks
+	} from '$lib/domain/tasks';
 	import type { IsoDate, Task } from '$lib/domain/types';
-	import { TaskItem, TaskForm } from '$lib/components';
+	import { TaskItem, TaskForm, CompletedTasksSection } from '$lib/components';
 
 	let formOpen = $state(false);
 	let editingTask = $state<Task | undefined>(undefined);
@@ -70,6 +75,19 @@
 	 * (US-038 scénario 9 : heure limite croissante, sans heure limite ensuite, ordre de création
 	 * en départage). */
 	const sortedTasks = $derived(sortTasksByDateThenDay(visibleTasks(tasksStore.tasks)));
+
+	/** Tâches séparées en « à faire » et « accomplies » (US-041 scénario 5), ordre préservé. */
+	const partition = $derived(partitionByCompletion(sortedTasks, completionsStore.taskCompletions));
+
+	/**
+	 * Tâches accomplies affichées ici : seulement celles des 7 derniers jours (US-041 scénario 6).
+	 * Les plus anciennes — et celles dont la date d'accomplissement n'a jamais été enregistrée
+	 * (scénario 9) — sont masquées de cet écran, **jamais supprimées** : elles restent consultables
+	 * sur le planning de leur jour, qui n'applique aucun horizon.
+	 */
+	const recentlyCompleted = $derived(
+		recentlyCompletedTasks(partition.completed, completionsStore.taskCompletions, today)
+	);
 </script>
 
 <svelte:head><title>Tracker — Tâches</title></svelte:head>
@@ -85,22 +103,45 @@
 {#if tasksStore.loaded && sortedTasks.length === 0 && !formOpen}
 	<p class="muted">Aucune tâche pour l'instant.</p>
 {:else}
-	<ul class="task-list">
-		{#each sortedTasks as task (task.id)}
-			<TaskItem
-				{task}
-				done={completionsStore.isTaskDone(task.id)}
-				{today}
-				onToggle={handleToggle}
-				onReschedule={handleReschedule}
-				onEdit={openEdit}
-				revealed={revealedTaskId === task.id}
-				onReveal={() => (revealedTaskId = task.id)}
-				onCloseReveal={() => (revealedTaskId = null)}
-				onDelete={handleDelete}
-			/>
-		{/each}
-	</ul>
+	{#if partition.pending.length > 0}
+		<ul class="task-list">
+			{#each partition.pending as task (task.id)}
+				<TaskItem
+					{task}
+					done={completionsStore.isTaskDone(task.id)}
+					{today}
+					onToggle={handleToggle}
+					onReschedule={handleReschedule}
+					onEdit={openEdit}
+					revealed={revealedTaskId === task.id}
+					onReveal={() => (revealedTaskId = task.id)}
+					onCloseReveal={() => (revealedTaskId = null)}
+					onDelete={handleDelete}
+				/>
+			{/each}
+		</ul>
+	{:else}
+		<p class="muted">Aucune tâche à faire.</p>
+	{/if}
+
+	<CompletedTasksSection count={recentlyCompleted.length}>
+		<ul class="task-list">
+			{#each recentlyCompleted as task (task.id)}
+				<TaskItem
+					{task}
+					done={completionsStore.isTaskDone(task.id)}
+					{today}
+					onToggle={handleToggle}
+					onReschedule={handleReschedule}
+					onEdit={openEdit}
+					revealed={revealedTaskId === task.id}
+					onReveal={() => (revealedTaskId = task.id)}
+					onCloseReveal={() => (revealedTaskId = null)}
+					onDelete={handleDelete}
+				/>
+			{/each}
+		</ul>
+	</CompletedTasksSection>
 {/if}
 
 <style>

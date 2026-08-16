@@ -143,6 +143,77 @@ export function isTaskDone(completions: TaskCompletion[], taskId: string): boole
 	return completions.find((c) => c.taskId === taskId)?.done ?? false;
 }
 
+/**
+ * Nombre de jours pendant lesquels une tâche accomplie reste affichée sur l'écran Tâches
+ * (US-041 scénario 6). Valeur fixe et non paramétrable — arbitrage produit explicite : un
+ * réglage ferait l'objet d'une US distincte s'il s'avérait nécessaire.
+ */
+export const COMPLETED_TASKS_VISIBLE_DAYS = 7;
+
+/** Tâches réparties selon leur état d'accomplissement (US-041). */
+export interface TaskPartition {
+	/** Tâches restant à faire, dans l'ordre reçu. */
+	pending: Task[];
+	/** Tâches accomplies, dans l'ordre reçu. */
+	completed: Task[];
+}
+
+/**
+ * Sépare des tâches déjà triées en « restant à faire » et « accomplies » (US-041 scénarios 1/3/5).
+ *
+ * L'ordre reçu est **conservé tel quel** dans chacun des deux groupes : cette fonction retire des
+ * éléments d'une liste, elle n'en réordonne aucun. C'est ce qui garantit que l'ordre d'affichage
+ * établi par US-038/US-039 (urgentes d'abord, puis heure limite croissante) survit intact au
+ * regroupement — le principal risque de régression de cette US.
+ */
+export function partitionByCompletion(tasks: Task[], completions: TaskCompletion[]): TaskPartition {
+	const pending: Task[] = [];
+	const completed: Task[] = [];
+	for (const task of tasks) {
+		(isTaskDone(completions, task.id) ? completed : pending).push(task);
+	}
+	return { pending, completed };
+}
+
+/**
+ * Une complétion est « récente » si sa date d'accomplissement est connue **et** remonte à `days`
+ * jours ou moins (US-041 scénario 6). Le décompte part de la date d'accomplissement, jamais de la
+ * date prévue de la tâche : une tâche en retard cochée hier reste visible (arbitrage 2026-08-16).
+ *
+ * Une complétion **sans date d'accomplissement** est considérée ancienne (scénario 9) : ce champ
+ * est optionnel et absent des tâches cochées avant son introduction. Masquage acceptable ici
+ * précisément parce que le planning, lui, n'applique aucun horizon — la tâche reste consultable
+ * au jour où elle était prévue, et rien n'est jamais supprimé.
+ */
+export function isRecentCompletion(
+	completion: TaskCompletion | undefined,
+	today: IsoDate,
+	days: number
+): boolean {
+	if (!completion?.done || !completion.doneAt) return false;
+	return daysBetween(completion.doneAt, today) <= days;
+}
+
+/**
+ * Tâches accomplies à afficher sur l'écran Tâches (US-041 scénarios 6/9) : uniquement celles dont
+ * l'accomplissement est récent. Le planning n'utilise pas ce filtre — il montre un jour
+ * explicitement choisi, où masquer n'aurait aucun sens (scénario 8).
+ */
+export function recentlyCompletedTasks(
+	tasks: Task[],
+	completions: TaskCompletion[],
+	today: IsoDate,
+	days: number = COMPLETED_TASKS_VISIBLE_DAYS
+): Task[] {
+	return tasks.filter((task) =>
+		isRecentCompletion(
+			completions.find((c) => c.taskId === task.id),
+			today,
+			days
+		)
+	);
+}
+
 /** Brouillon de formulaire de tâche (US-002), avant construction d'un `Task`. */
 export interface TaskDraft {
 	name: string;

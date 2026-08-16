@@ -16,7 +16,8 @@
 	import { hasNumericTarget } from '$lib/domain/habits';
 	import { missedYesterday } from '$lib/domain/regularity';
 	import type { Habit, IsoDate, Task } from '$lib/domain/types';
-	import { TaskItem, HabitForm, TaskForm } from '$lib/components';
+	import { partitionByCompletion } from '$lib/domain/tasks';
+	import { TaskItem, HabitForm, TaskForm, CompletedTasksSection } from '$lib/components';
 	import HabitCheckItem from './HabitCheckItem.svelte';
 	import HabitProgressItem from './HabitProgressItem.svelte';
 	import DateStrip from './DateStrip.svelte';
@@ -49,6 +50,13 @@
 
 	const dueHabits = $derived(habitsStore.dueOn(selectedDate));
 	const dueTasks = $derived(tasksStore.onDate(selectedDate));
+
+	/**
+	 * Tâches du jour séparées en « à faire » et « accomplies » (US-041 scénarios 1/3). Aucun
+	 * horizon temporel ici, contrairement à `/taches` : le planning montre un jour explicitement
+	 * choisi, où masquer une tâche accomplie n'aurait aucun sens (scénario 8).
+	 */
+	const dayTasks = $derived(partitionByCompletion(dueTasks, completionsStore.taskCompletions));
 
 	/** Coche/décoche une habitude (US-004 scénarios 4/5) et resynchronise la fenêtre de rappels
 	 * (US-023 scénarios 1/2/5) : réduit, sans l'éliminer (best-effort, ADR-001), le risque de
@@ -171,17 +179,35 @@
 	{#if dueTasks.length === 0}
 		<p class="muted">Aucune tâche prévue ce jour.</p>
 	{:else}
-		<ul class="item-list">
-			{#each dueTasks as task (task.id)}
-				<TaskItem
-					{task}
-					done={completionsStore.isTaskDone(task.id)}
-					today={realToday}
-					onToggle={handleTaskToggle}
-					onReschedule={handleReschedule}
-				/>
-			{/each}
-		</ul>
+		{#if dayTasks.pending.length > 0}
+			<ul class="item-list">
+				{#each dayTasks.pending as task (task.id)}
+					<TaskItem
+						{task}
+						done={completionsStore.isTaskDone(task.id)}
+						today={realToday}
+						onToggle={handleTaskToggle}
+						onReschedule={handleReschedule}
+					/>
+				{/each}
+			</ul>
+		{:else}
+			<p class="muted">Tout est fait pour ce jour.</p>
+		{/if}
+
+		<CompletedTasksSection count={dayTasks.completed.length}>
+			<ul class="item-list">
+				{#each dayTasks.completed as task (task.id)}
+					<TaskItem
+						{task}
+						done={completionsStore.isTaskDone(task.id)}
+						today={realToday}
+						onToggle={handleTaskToggle}
+						onReschedule={handleReschedule}
+					/>
+				{/each}
+			</ul>
+		</CompletedTasksSection>
 	{/if}
 </section>
 
