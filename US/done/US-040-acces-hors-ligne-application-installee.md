@@ -4,7 +4,7 @@ id: US-040
 titre: Accès complet à l'application hors connexion une fois installée
 date: 2026-08-16
 auteur: product-owner
-statut: en cours
+statut: livrée
 priorite: Must
 estimation: L
 source: chat
@@ -210,9 +210,10 @@ Le passage de l'US en `done` et la clôture de BUG-002 sont conditionnés à ces
 
 ### Implémentation
 
-**État : code terminé, quality gate vert, en attente de la validation sur iPhone réel.**
-L'US reste en `in_progress` parce que sa propre définition de terminé exige deux preuves et qu'une
-seule est acquise à ce stade (voir « Reste à faire » plus bas).
+**État : livrée le 2026-08-16.** Les deux preuves exigées par la définition de terminé sont
+acquises : quality gate vert en CI, et validation en mode avion sur l'iPhone de l'utilisateur,
+application installée sur l'écran d'accueil, confirmée le 2026-08-16 après déploiement en
+production (run CI `31935270567`).
 
 #### Fichiers créés
 | Fichier | Rôle |
@@ -279,11 +280,17 @@ aurait vidé tout le précache.
 - **`navigator.onLine` est une heuristique** : il n'est jamais consulté seul, seulement après
   l'échec d'une requête, pour trancher entre « à rejouer » et « à signaler ».
 
-#### Reste à faire pour clôturer
-Validation manuelle sur l'iPhone, app installée sur l'écran d'accueil, en mode avion, rejouant au
-minimum les scénarios 1, 2 et 3 — seconde preuve exigée par la définition de terminé ci-dessus.
-Nécessite un déploiement préalable en production. Tant qu'elle n'est pas faite, ni cette US ni
-BUG-002 ne peuvent passer en `done`.
+#### Validation sur appareil réel (2026-08-16)
+Rejouée par l'utilisateur sur son iPhone, application installée sur l'écran d'accueil, en mode
+avion, après déploiement en production : **conforme**. L'app s'ouvre depuis l'icône sans réseau
+(scénario 1), les écrans sont navigables (scénario 2) et les saisies hors ligne tiennent
+(scénario 3). C'est la preuve qui ne pouvait pas être obtenue en CI, et le contexte exact où
+BUG-002 était apparu.
+
+Séquence de bascule à connaître, conséquence directe de la suppression de `skipWaiting` : deux
+ouvertures en ligne successives, entrecoupées d'une fermeture complète, sont nécessaires pour que
+la nouvelle version prenne la main. C'est le comportement voulu par le scénario 6bis, et il ne
+concerne que la transition vers cette version.
 
 ### Arbitrages produit (2026-08-16)
 Quatre points ouverts ont été tranchés avec l'utilisateur avant le passage de l'US en `prête` :

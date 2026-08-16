@@ -4,13 +4,27 @@ id: BUG-002
 titre: L'application PWA installée sur l'écran d'accueil ne s'ouvre pas hors connexion ("Safari ne peut pas ouvrir la page")
 date: 2026-08-16
 auteur: qa
-statut: à corriger
+statut: corrigé
 severite: bloquant
 us_liee: ["US-040"]
 reproductible: toujours
 ---
 
 # BUG-002 — L'application PWA installée sur l'écran d'accueil ne s'ouvre pas hors connexion
+
+## Correction (2026-08-16)
+Corrigé par **US-040**, livrée le 2026-08-16 (commit `53a1474`, run CI `31935270567`), et vérifié
+en mode avion sur l'iPhone concerné — le contexte même où le défaut était apparu.
+
+Cause confirmée telle que décrite dans « Notes / pistes » : le précache ne contenait aucune page
+HTML. Le correctif ajoute l'export `prerendered` de `$service-worker` au précache, sert la route
+réellement demandée au lieu de la clé fixe `'/'`, et garantit que chaque branche du gestionnaire
+`fetch` retourne un `Response` — jamais `undefined`, la cause littérale du message d'erreur.
+Détail des fichiers et des limites assumées dans la section « Implémentation » d'US-040.
+
+Trou de couverture comblé au passage : la stratégie de réponse vit désormais dans
+`src/lib/offline/strategy.ts`, testée unitairement sans navigateur. C'est son absence qui avait
+laissé ce défaut atteindre la production.
 
 ## Résumé
 Sur iPhone, une fois l'application installée sur l'écran d'accueil et déjà ouverte au moins une

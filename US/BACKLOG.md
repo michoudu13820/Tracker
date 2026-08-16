@@ -43,7 +43,7 @@ Index des User Stories. Cycle de vie des fichiers : `US/to_be_implemented/` → 
 | US-037 | Couleur choisie par tâche ponctuelle | Should | livrée | S | US/done/US-037-couleur-carte-tache.md |
 | US-038 | Ordre d'affichage des tâches d'un même jour par heure limite | Should | livrée | S | US/done/US-038-ordre-affichage-taches-du-jour.md |
 | US-039 | Marquer une tâche comme urgente et la faire remonter en tête du jour | Should | livrée | M | US/done/US-039-tache-urgente.md |
-| US-040 | Accès complet à l'application hors connexion une fois installée | Must | en cours | L | US/in_progress/US-040-acces-hors-ligne-application-installee.md |
+| US-040 | Accès complet à l'application hors connexion une fois installée | Must | livrée | L | US/done/US-040-acces-hors-ligne-application-installee.md |
 
 ## Ordre logique d'implémentation recommandé (MVP puis extensions)
 

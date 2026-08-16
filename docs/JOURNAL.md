@@ -92,3 +92,48 @@ documente le *déroulé* — utile pour reprendre le fil d'une session à l'autr
 1. Décider et finaliser l'option de déploiement continu (recommandé : lier le repo dans Netlify).
 2. Implémenter les User Stories du backlog (`US/BACKLOG.md`), en commençant par US-001.
 3. Remplacer le bouton/endpoint de test Web Push par la vraie UX de réglages des rappels (US-007).
+
+## 2026-08-16 — BUG-002 / US-040 : l'app ne s'ouvrait plus hors connexion
+
+- **Symptôme** : sur iPhone, app installée sur l'écran d'accueil, ouverture sans réseau →
+  « Safari ne peut pas ouvrir la page », avec
+  `FetchEvent.respondWith received an error: Returned response is null`.
+- **Cause** : le précache du service worker ne contenait que `build` et `files` — bundle JS/CSS et
+  contenu de `static/`, donc **aucune page HTML**. Toute navigation hors ligne partait au réseau,
+  échouait, puis retombait sur `caches.match('/')`, une clé jamais mise en cache, qui résolvait à
+  `undefined`. Trois défauts connexes trouvés dans la foulée : le repli visait la clé fixe `'/'` et
+  non la route demandée, plusieurs branches pouvaient résoudre à `undefined`, et `cache.addAll`
+  étant atomique, une seule ressource introuvable aurait vidé tout le précache.
+
+### La leçon, plus importante que le correctif
+L'engagement « offline-first » était acté dans l'ADR-001 et vérifié **une fois, manuellement**, le
+2026-08-11 — mais **aucune US ne le formalisait en critère Given/When/Then testable**. Rien ne
+gardait donc la promesse dans le temps : la régression est passée sans que quoi que ce soit
+n'échoue. C'est pour combler ce trou de couverture, et pas seulement pour réparer, que US-040 a été
+rédigée après coup.
+
+Corollaire appliqué à l'implémentation : la stratégie de réponse du service worker a été extraite
+dans `src/lib/offline/strategy.ts` pour être testable sans navigateur. Un ADR ne se teste pas ; un
+module, si.
+
+### Arbitrages produit tranchés ce jour
+| Point | Décision |
+|---|---|
+| Ressource jamais mise en cache | Écran `/hors-ligne` explicite **avec retour au planning**, pas de redirection silencieuse |
+| Nouvelle version déployée | Mise à jour **silencieuse différée au prochain lancement** — `skipWaiting()` supprimé |
+| Actions serveur faites hors ligne | **Retenues et rejouées** au retour du réseau, plutôt que bloquées |
+| Indicateur global en ligne / hors ligne | **Écarté** volontairement, aucune US ouverte |
+| Preuve de clôture | Tests automatisés **et** validation sur iPhone réel |
+
+### Conséquence opérationnelle à retenir
+Sans `skipWaiting()`, une nouvelle version exige désormais **deux ouvertures en ligne successives,
+entrecoupées d'une fermeture complète de l'app**, avant de prendre la main. C'est le prix assumé du
+« pas de rechargement subi » — à garder en tête pour toute future validation sur appareil, sous
+peine de tester l'ancienne version en croyant tester la nouvelle.
+
+### État
+- US-040 **livrée**, BUG-002 **corrigé**, validés en mode avion sur l'iPhone le 2026-08-16.
+- Commit `53a1474`, run CI `31935270567` (typecheck/tests/build + déploiement Netlify), 660 tests
+  au vert dont 28 ajoutés par cette US.
+- Reste non couvert par l'automatisation : le cycle de vie réel d'un service worker (scénarios 1, 2
+  et 6/6bis d'US-040) — Playwright n'est toujours pas installé sur le projet.
