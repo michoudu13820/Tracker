@@ -182,3 +182,52 @@ appeler. La seule différence entre les deux écrans tient en une ligne : `/tach
   mais c'est le point le plus susceptible de déplaire à l'usage.
 - Dette connexe repérée au passage, hors périmètre : le `README.md` n'a pas bougé depuis le
   scaffold du 2026-08-11 et ne décrit **aucune** des 41 US livrées.
+
+## 2026-08-16 — BUG-003 (zoom au focus) corrigé, BUG-004 rejeté
+
+Deux remontées iPhone dans la même session, deux issues opposées — et c'est la comparaison des deux
+qui est instructive.
+
+### BUG-003 — corrigé
+Taper dans n'importe quel champ zoomait la page, et **le zoom ne se retirait pas** à la fermeture du
+clavier : l'app restait zoomée jusqu'à ce que l'utilisateur dézoome au pincement (d'où `majeur`, et
+non `mineur` comme estimé au dépôt de la fiche).
+
+Cause : les contrôles de formulaire **n'héritent pas** de la taille de texte du `body`, et
+`app.css` ne contenait aucune règle les visant. Tous les champs retombaient donc sur la valeur par
+défaut de WebKit (~13 px), **sous le seuil de 16 px** en dessous duquel Safari iOS zoome au focus.
+Défaut uniforme sur toute l'app, pas localisé — corrigé par une seule règle globale.
+
+`user-scalable=no` / `maximum-scale` ont été **écartés délibérément** : ils auraient supprimé aussi
+le zoom manuel, qui est une fonction d'accessibilité et le seul recours de l'utilisateur quand
+l'affichage part de travers. On corrige le zoom **subi**, on ne confisque pas le zoom **voulu** —
+et un test verrouille désormais ce corollaire.
+
+Le test qui compte n'est pas celui du plancher global, c'est le second : il balaie les blocs
+`<style>` de tous les `.svelte` pour interdire qu'un composant repasse un champ sous 16 px. Une
+règle scopée Svelte est plus spécifique que la règle globale et rouvrirait le défaut **sur son seul
+écran** — réintroduction discrète, invisible à la relecture, et impossible à voir en CI autrement.
+
+### BUG-004 — rejeté, non-défaut
+« La section *Tâches accomplies* n'apparaît pas sur iPhone. » Diagnostic : l'appareil exécutait
+encore une version antérieure à US-041. Après deux fermetures complètes de l'app, tout était
+correct. Aucune ligne de code modifiée.
+
+Deux indices auraient dû suffire, et ils sont réutilisables tels quels la prochaine fois :
+1. **le symptôme était exactement le comportement d'avant la fonctionnalité** — pas un rendu cassé
+   ou partiel, mais l'ancienne version intacte ;
+2. **le navigateur de bureau fonctionnait** — la ligne de partage entre les deux appareils était le
+   cache, pas le code.
+
+### La leçon opérationnelle, à ne pas rejouer une troisième fois
+C'est le **deuxième** aller-retour de diagnostic causé par la mise à jour différée d'US-040
+(`skipWaiting()` retiré, arbitrage « pas de rechargement subi »). Le prix de cet arbitrage n'est
+pas théorique : il se paie en **temps de recette**, à chaque validation sur appareil.
+
+Piste laissée au Product Owner (aucune US ouverte) : **rendre la version exécutée observable dans
+l'app** — un numéro de commit discret dans les Réglages aurait tranché BUG-004 en dix secondes,
+sans instruction ni aller-retour.
+
+Réflexe à appliquer d'ici là : avant d'instruire un défaut constaté sur iPhone, vérifier ce que
+sert réellement la production (`curl` sur le bundle déployé + recherche d'une chaîne propre à la
+fonctionnalité) **et** faire refermer l'app deux fois.

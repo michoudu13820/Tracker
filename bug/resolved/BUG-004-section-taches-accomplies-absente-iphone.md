@@ -4,7 +4,7 @@ id: BUG-004
 titre: Sur iPhone, la section « Tâches accomplies » n'apparaît pas — les tâches cochées restent dans la liste
 date: 2026-08-16
 auteur: qa
-statut: à corriger
+statut: rejeté
 severite: majeur
 us_liee: [US-041]
 reproductible: toujours
@@ -105,3 +105,36 @@ relevés, sans valeur prescriptive :
 Le défaut se produit-il sur **le planning**, sur **l'onglet Tâches**, ou sur **les deux** ? Les deux
 écrans partagent la même fonction de partition mais ne composent pas le même filtrage : la réponse
 oriente fortement le diagnostic.
+
+---
+
+## Clôture — `rejeté` (non-défaut), 2026-08-16
+
+**La vérification préalable a suffi.** Après fermeture complète de l'application **à deux
+reprises**, la section « Tâches accomplies » s'affiche correctement sur l'iPhone (confirmé par
+l'utilisateur le 2026-08-16). Aucun code n'a été modifié.
+
+L'hypothèse principale de cette fiche est donc confirmée : l'iPhone exécutait encore une version
+antérieure à US-041. Le comportement observé n'était pas un défaut mais **l'ancienne version,
+intacte** — ce que le symptôme laissait déjà entendre (les tâches cochées restaient dans la liste,
+exactement comme avant US-041), et ce que corroborait le bon fonctionnement sur navigateur de
+bureau, sans service worker installé de longue date.
+
+Contrôles effectués sur la production pendant l'instruction, qui écartaient un défaut de
+déploiement :
+- la chaîne « accomplies » est bien présente dans le bundle servi
+  (`_app/immutable/chunks/UsK0TPIG.js`), ainsi qu'un asset dédié
+  `CompletedTasksSection.*.css` — US-041 était donc bien en ligne ;
+- le correctif de BUG-003 (`input,select,textarea{font-size:16px}`) l'était également.
+
+### Ce que ce faux positif apprend, et qui n'est pas rien
+C'est la **deuxième fois** que la mise à jour différée d'US-040 (`skipWaiting()` retiré, arbitrage
+« pas de rechargement subi ») coûte un aller-retour de diagnostic — la première étant la validation
+d'US-040 elle-même, qui avait déjà motivé la note « Conséquence opérationnelle à retenir » du
+journal. Le prix de cet arbitrage n'est donc pas théorique : il se paie en **temps de recette**, à
+chaque validation sur appareil, et il se paiera à nouveau.
+
+Piste à soumettre au Product Owner (aucune US ouverte, ce n'est pas une décision QA) : rendre la
+version exécutée **observable dans l'application** — par exemple un numéro de version ou de commit
+discret dans l'écran Réglages. Un tel repère aurait tranché cette fiche en dix secondes, sans
+instruction ni aller-retour, et servirait à toutes les validations futures.
