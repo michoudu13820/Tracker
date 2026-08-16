@@ -188,7 +188,7 @@ appeler. La seule différence entre les deux écrans tient en une ligne : `/tach
 Deux remontées iPhone dans la même session, deux issues opposées — et c'est la comparaison des deux
 qui est instructive.
 
-### BUG-003 — corrigé
+### BUG-003 — corrigé, validé sur iPhone
 Taper dans n'importe quel champ zoomait la page, et **le zoom ne se retirait pas** à la fermeture du
 clavier : l'app restait zoomée jusqu'à ce que l'utilisateur dézoome au pincement (d'où `majeur`, et
 non `mineur` comme estimé au dépôt de la fiche).

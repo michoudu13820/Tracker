@@ -127,6 +127,11 @@ défaut visible sur les champs oubliés.
 
 ## Résumé de correction (2026-08-16)
 
+> **Validé sur iPhone réel le 2026-08-16** par l'utilisateur, sur la version déployée en
+> production : plus aucun zoom au focus d'un champ. C'est la preuve de clôture exigée pour tout
+> défaut observable seulement sur l'appareil (même règle que US-040), les tests automatisés ne
+> pouvant pas observer le zoom natif de WebKit.
+
 ### Cause racine
 Les contrôles de formulaire **n'héritent pas** de la taille de texte du `body` : c'est une règle des
 navigateurs, pas une particularité du projet. Or `src/app.css` ne contenait **aucune** règle visant
